@@ -1,0 +1,100 @@
+@page "/runs/{id:long}"
+@model LiteJob.Web.Pages.RunDetailModel
+@{
+    ViewData["Title"] = "执行详情 - LiteJob";
+    Layout = "_Layout";
+}
+
+<h2 class="page-title">执行详情 <a href="/runs" class="btn mini" style="vertical-align: middle;">← 返回列表</a></h2>
+
+<div id="global-error"></div>
+
+<div class="panel" id="detail-panel">
+    <div class="muted">加载中…</div>
+</div>
+
+<div class="panel" id="result-panel" style="display:none;">
+    <div class="section-title" style="margin-top: 0;">结果 result</div>
+    <pre class="code-block" id="result-block"></pre>
+</div>
+
+<div class="panel" id="error-panel" style="display:none;">
+    <div class="section-title" style="margin-top: 0; border-left-color: #c0392b;">错误 error</div>
+    <pre class="code-block" id="error-block"></pre>
+</div>
+
+@section Scripts {
+<script>
+    var runId = @Model.Id;
+
+    function escapeHtml(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function statusBadge(s) {
+        var map = {
+            success: '<span class="badge green">success</span>',
+            failed: '<span class="badge red">failed</span>',
+            running: '<span class="badge orange">running</span>',
+            skipped: '<span class="badge gray">skipped</span>'
+        };
+        return map[s] || escapeHtml(s);
+    }
+
+    function pretty(value) {
+        if (!value) return '';
+        try {
+            var obj = JSON.parse(value);
+            return JSON.stringify(obj, null, 2);
+        } catch (e) {
+            return value;
+        }
+    }
+
+    async function load() {
+        var resp;
+        try { resp = await fetchApi('/api/runs/' + runId); }
+        catch (err) { return; }
+        if (!resp.ok) {
+            var box = document.getElementById('global-error');
+            box.textContent = '执行记录不存在或已删除';
+            box.style.display = 'block';
+            document.getElementById('detail-panel').style.display = 'none';
+            return;
+        }
+        var r = await resp.json();
+        document.title = '执行详情 #' + r.id + ' - LiteJob';
+
+        var rows = [
+            ['ID', r.id],
+            ['任务', '#' + r.taskId + ' ' + r.taskName],
+            ['状态', statusBadge(r.status)],
+            ['触发时间', fmtTime(r.triggerAt)],
+            ['开始时间', fmtTime(r.startedAt)],
+            ['结束时间', fmtTime(r.finishedAt)],
+            ['耗时', fmtDuration(r.durationMs)],
+            ['尝试次数', r.attempt],
+            ['创建时间', fmtTime(r.createAt)]
+        ];
+        document.getElementById('detail-panel').innerHTML = '<table class="grid"><tbody>' +
+            rows.map(function (row) {
+                return '<tr><th style="width: 140px; background: #fafbfc;">' + row[0] + '</th><td>' + row[1] + '</td></tr>';
+            }).join('') + '</tbody></table>';
+
+        var resultPanel = document.getElementById('result-panel');
+        if (r.result) {
+            document.getElementById('result-block').textContent = pretty(r.result);
+            resultPanel.style.display = '';
+        } else { resultPanel.style.display = 'none'; }
+
+        var errorPanel = document.getElementById('error-panel');
+        if (r.error) {
+            document.getElementById('error-block').textContent = pretty(r.error);
+            errorPanel.style.display = '';
+        } else { errorPanel.style.display = 'none'; }
+    }
+
+    load();
+</script>
+}

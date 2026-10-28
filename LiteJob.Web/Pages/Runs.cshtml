@@ -1,0 +1,140 @@
+@page
+@model LiteJob.Web.Pages.RunsModel
+@{
+    ViewData["Title"] = "执行记录 - LiteJob";
+    Layout = "_Layout";
+}
+
+<h2 class="page-title">执行记录</h2>
+
+<div id="global-error"></div>
+
+<div class="toolbar">
+    <label>任务</label>
+    <select id="f-task" style="min-width: 160px;"><option value="">全部任务</option></select>
+    <label>状态</label>
+    <select id="f-status">
+        <option value="">全部</option>
+        <option value="running">running</option>
+        <option value="success">success</option>
+        <option value="failed">failed</option>
+        <option value="skipped">skipped</option>
+    </select>
+    <label>时间从</label>
+    <input id="f-from" type="datetime-local" />
+    <label>到</label>
+    <input id="f-to" type="datetime-local" />
+    <button class="btn primary" onclick="reload(1)">查询</button>
+    <span style="flex:1"></span>
+    <button class="btn" onclick="exportCsv()">导出 CSV</button>
+</div>
+
+<div class="panel" style="padding: 0;">
+    <table class="grid" id="run-table">
+        <thead>
+            <tr><th>ID</th><th>任务</th><th>状态</th><th>触发时间</th><th>开始</th><th>结束</th><th>耗时</th><th>尝试</th><th>错误摘要</th></tr>
+        </thead>
+        <tbody><tr><td colspan="9" class="muted">加载中…</td></tr></tbody>
+    </table>
+</div>
+
+<div class="pagination">
+    <button class="btn mini" id="page-prev" onclick="reload(page - 1)">上一页</button>
+    <span id="page-info">-</span>
+    <button class="btn mini" id="page-next" onclick="reload(page + 1)">下一页</button>
+</div>
+
+@section Scripts {
+<script>
+    var page = 1, totalPages = 1, pageSize = 20;
+
+    function escapeHtml(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function statusBadge(s) {
+        var map = {
+            success: '<span class="badge green">success</span>',
+            failed: '<span class="badge red">failed</span>',
+            running: '<span class="badge orange">running</span>',
+            skipped: '<span class="badge gray">skipped</span>'
+        };
+        return map[s] || escapeHtml(s);
+    }
+
+    function filterParams() {
+        return new URLSearchParams({
+            taskId: document.getElementById('f-task').value,
+            status: document.getElementById('f-status').value,
+            from: document.getElementById('f-from').value,
+            to: document.getElementById('f-to').value
+        });
+    }
+
+    function toApiParams(params, withPaging) {
+        var copy = new URLSearchParams();
+        params.forEach(function (v, k) { if (v) copy.append(k, k === 'from' || k === 'to' ? v.replace('T', ' ') : v); });
+        if (withPaging) { copy.append('page', page); copy.append('pageSize', pageSize); }
+        return copy.toString();
+    }
+
+    async function loadTaskOptions() {
+        var resp = await fetchApi('/api/tasks?pageSize=100');
+        if (!resp.ok) return;
+        var data = await resp.json();
+        var select = document.getElementById('f-task');
+        data.items.forEach(function (t) {
+            var option = document.createElement('option');
+            option.value = t.id;
+            option.textContent = '#' + t.id + ' ' + t.name;
+            select.appendChild(option);
+        });
+    }
+
+    async function reload(targetPage) {
+        page = Math.max(1, targetPage || 1);
+        var query = toApiParams(filterParams(), true);
+        try {
+            var resp = await fetchApi('/api/runs?' + query);
+            if (!resp.ok) { showError('加载执行记录失败：' + resp.status); return; }
+            var data = await resp.json();
+            totalPages = Math.max(1, Math.ceil(data.total / pageSize));
+            page = Math.min(page, totalPages);
+            document.getElementById('page-info').textContent = '第 ' + page + ' / ' + totalPages + ' 页，共 ' + data.total + ' 条';
+            document.getElementById('page-prev').disabled = page <= 1;
+            document.getElementById('page-next').disabled = page >= totalPages;
+
+            var tbody = document.querySelector('#run-table tbody');
+            if (data.total === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="muted">暂无执行记录</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.items.map(function (r) {
+                var error = (r.error || '-');
+                if (error.length > 60) error = error.slice(0, 60) + '…';
+                return '<tr class="clickable" onclick="location.href=\'/runs/' + r.id + '\'">' +
+                    '<td>' + r.id + '</td><td>' + escapeHtml(r.taskName) + '</td><td>' + statusBadge(r.status) +
+                    '</td><td>' + fmtTime(r.triggerAt) + '</td><td>' + fmtTime(r.startedAt) + '</td><td>' + fmtTime(r.finishedAt) +
+                    '</td><td>' + fmtDuration(r.durationMs) + '</td><td>' + r.attempt +
+                    '</td><td style="color:' + (r.error ? '#c0392b' : '') + ';">' + escapeHtml(error) + '</td></tr>';
+            }).join('');
+        } catch (err) {
+            if (err && err.message !== 'unauthorized') showError('网络错误');
+        }
+    }
+
+    function exportCsv() {
+        var query = toApiParams(filterParams(), false);
+        location.href = '/api/runs/export' + (query ? '?' + query : '');
+    }
+
+    function showError(msg) {
+        var box = document.getElementById('global-error');
+        box.textContent = msg; box.style.display = 'block';
+    }
+
+    loadTaskOptions();
+    reload(1);
+</script>
+}

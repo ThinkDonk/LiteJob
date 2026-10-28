@@ -130,9 +130,63 @@ public sealed class TaskRepository
             new { Id = id, Cron = cron, UpdatedAt = Format(DateTime.Now) });
     }
 
+    public async Task<(int Total, int Enabled)> GetTotalAndEnabledAsync()
+    {
+        await using var conn = await _factory.CreateOpenConnectionAsync();
+        var row = await conn.QuerySingleOrDefaultAsync<TaskCountRow>(
+            "SELECT COUNT(*) AS Total, SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) AS Enabled FROM t_task;");
+        return ((int)(row?.Total ?? 0), (int)(row?.Enabled ?? 0));
+    }
+
+    public async Task<TaskEntity> CopyAsync(long id, string? updatedBy)
+    {
+        var source = await GetByIdAsync(id)
+            ?? throw new InvalidOperationException($"任务不存在：{id}");
+
+        var names = await GetNamesLikeAsync(source.Name + "-copy");
+        var candidate = source.Name + "-copy";
+        for (var suffix = 2; names.Contains(candidate); suffix++)
+        {
+            candidate = $"{source.Name}-copy{suffix}";
+        }
+
+        var copy = new TaskEntity
+        {
+            Name = candidate,
+            GroupName = source.GroupName,
+            TaskType = source.TaskType,
+            Cron = source.Cron,
+            Params = source.Params,
+            TimeoutSec = source.TimeoutSec,
+            RetryMax = source.RetryMax,
+            Enabled = 0,
+            LastRunSuccess = null,
+            NotifyPolicy = source.NotifyPolicy,
+            Remark = source.Remark,
+            CreatedBy = updatedBy,
+            UpdatedBy = updatedBy,
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now,
+            NextPlannedAt = null
+        };
+        copy.Id = await InsertAsync(copy);
+        return copy;
+    }
+
+    private async Task<HashSet<string>> GetNamesLikeAsync(string prefix)
+    {
+        await using var conn = await _factory.CreateOpenConnectionAsync();
+        var names = await conn.QueryAsync<string>(
+            "SELECT name FROM t_task WHERE substr(name, 1, length(@Prefix)) = @Prefix;",
+            new { Prefix = prefix });
+        return names.ToHashSet();
+    }
+
     internal static string? Format(DateTime? time)
         => time is null ? null : Format(time.Value);
 
     internal static string Format(DateTime time)
         => time.ToString("yyyy-MM-dd HH:mm:ss");
 }
+
+public sealed record TaskCountRow(long Total, long? Enabled);

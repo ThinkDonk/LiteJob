@@ -1,0 +1,329 @@
+@page "/tasks/edit"
+@model LiteJob.Web.Pages.TasksEditModel
+@{
+    ViewData["Title"] = "任务编辑 - LiteJob";
+    Layout = "_Layout";
+}
+
+<h2 class="page-title" id="page-title">新建任务</h2>
+
+<div id="global-error"></div>
+<div id="form-error" style="display:none; margin-bottom: 12px; padding: 8px 12px; background: #fdecea; color: #c0392b; border: 1px solid #f5b7b1; border-radius: 4px;"></div>
+
+<form id="task-form" onsubmit="return save(event);">
+    <div class="panel">
+        <div class="section-title" style="margin-top: 0;">基本信息</div>
+        <div class="form-item">
+            <label>任务名称 *</label>
+            <input id="f-name" type="text" required placeholder="全局唯一" />
+        </div>
+        <div class="form-item">
+            <label>分组</label>
+            <input id="f-group" type="text" placeholder="default" />
+        </div>
+        <div class="form-item">
+            <label>备注</label>
+            <input id="f-remark" type="text" placeholder="选填" />
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="section-title" style="margin-top: 0;">触发模式</div>
+        <div class="form-item">
+            <label style="display:inline-block; margin-right: 24px;">
+                <input type="radio" name="trigger-mode" value="cron" checked onchange="onModeChange()" /> cron 循环调度
+            </label>
+            <label style="display:inline-block;">
+                <input type="radio" name="trigger-mode" value="once" onchange="onModeChange()" /> once 一次性
+            </label>
+        </div>
+        <div id="cron-section">
+            <div class="form-item">
+                <label>cron 表达式（5 或 6 字段，6 字段含秒，服务器本地时区）</label>
+                <div style="display:flex; gap:10px; align-items:center; max-width: 640px;">
+                    <input id="f-cron" type="text" style="flex:1;" placeholder="*/5 * * * * ?" oninput="onCronInput()" />
+                    <select id="cron-template" onchange="applyTemplate(this.value)">
+                        <option value="">常用模板…</option>
+                        <option value="0/5 * * * * ?">每5秒</option>
+                        <option value="0 * * * * ?">每分钟</option>
+                        <option value="0 0 8 * * ?">每天8点</option>
+                        <option value="0 0 * * * ?">每小时</option>
+                        <option value="0 0 9 ? * 2">每周一9点</option>
+                    </select>
+                </div>
+                <div id="cron-preview" class="muted" style="margin-top: 8px; font-size: 13px; line-height: 1.8;">输入表达式后实时预览未来 5 次触发</div>
+            </div>
+        </div>
+        <div id="once-section" style="display:none;">
+            <div class="form-item">
+                <label>触发时间（到点执行一次后自动结束）</label>
+                <input id="f-once" type="datetime-local" onchange="onOnceInput()" />
+                <div class="muted" style="margin-top: 6px; font-size: 13px;">保存后 cron 字段将写入 once:yyyy-MM-dd HH:mm</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="section-title" style="margin-top: 0;">执行器参数</div>
+        <div class="form-item">
+            <label>执行器类型</label>
+            <select id="f-type" onchange="onTypeChange()">
+                <option value="http">http（HTTP API 调用）</option>
+                <option value="mail">mail（M4 交付）</option>
+            </select>
+        </div>
+        <div id="http-params">
+            <div class="form-item">
+                <label>method</label>
+                <select id="p-method">
+                    <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label>url *</label>
+                <input id="p-url" type="text" placeholder="http://..." />
+            </div>
+            <div class="form-item">
+                <label>headers（支持 {date} 等模板变量）</label>
+                <div id="header-rows"></div>
+                <button type="button" class="btn mini" onclick="addHeaderRow('', '')">＋ 添加 Header</button>
+            </div>
+            <div class="form-item">
+                <label>body（POST/PUT 可用）</label>
+                <textarea id="p-body" rows="4" placeholder='{"key": "{date}"}'></textarea>
+            </div>
+            <div class="form-item">
+                <label>successContains（可选：响应体包含此串才算成功，留空则 2xx 即成功）</label>
+                <input id="p-success" type="text" />
+            </div>
+        </div>
+        <div id="mail-params" style="display:none; padding: 12px; background: #fef5e7; border: 1px solid #f9e2b3; border-radius: 4px; color: #8a6d3b;">
+            邮件执行器在 M4 里程碑交付，当前版本选择 mail 将无法保存。
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="section-title" style="margin-top: 0;">执行质量</div>
+        <div style="display:flex; gap: 24px; flex-wrap: wrap;">
+            <div class="form-item" style="flex:1; max-width: 220px;">
+                <label>超时（秒）</label>
+                <input id="f-timeout" type="number" min="1" max="3600" value="30" />
+            </div>
+            <div class="form-item" style="flex:1; max-width: 220px;">
+                <label>重试次数（不含首次）</label>
+                <input id="f-retry" type="number" min="0" max="10" value="3" />
+            </div>
+            <div class="form-item" style="flex:1; max-width: 220px;">
+                <label>启用状态</label>
+                <select id="f-enabled"><option value="1">启用</option><option value="0">停用</option></select>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:flex; gap: 12px; margin-bottom: 24px;">
+        <button type="submit" class="btn primary" id="save-btn" style="padding: 8px 28px;">保 存</button>
+        <a class="btn" href="/tasks">取消</a>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+    var taskId = @(Model.TaskId?.ToString() ?? "null");
+    var debounceTimer = null;
+
+    function escapeHtml(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showFormError(msg) {
+        var box = document.getElementById('form-error');
+        box.textContent = msg;
+        box.style.display = 'block';
+        window.scrollTo(0, 0);
+    }
+    function hideFormError() { document.getElementById('form-error').style.display = 'none'; }
+
+    function currentMode() {
+        return document.querySelector('input[name="trigger-mode"]:checked').value;
+    }
+
+    function onModeChange() {
+        var cron = currentMode() === 'cron';
+        document.getElementById('cron-section').style.display = cron ? '' : 'none';
+        document.getElementById('once-section').style.display = cron ? 'none' : '';
+    }
+
+    function onCronInput() {
+        document.getElementById('cron-template').value = '';
+        schedulePreview();
+    }
+
+    function applyTemplate(expr) {
+        if (!expr) return;
+        document.getElementById('f-cron').value = expr;
+        schedulePreview();
+    }
+
+    function schedulePreview() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(previewCron, 400);
+    }
+
+    async function previewCron() {
+        if (currentMode() !== 'cron') return;
+        var expr = document.getElementById('f-cron').value.trim();
+        var box = document.getElementById('cron-preview');
+        if (!expr) { box.textContent = '输入表达式后实时预览未来 5 次触发'; box.className = 'muted'; return; }
+        try {
+            var resp = await fetchApi('/api/cron/preview', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expr: expr })
+            });
+            var d = await resp.json();
+            if (d.ok) {
+                box.innerHTML = '未来 5 次触发：<br/>' + d.times.map(function (t) { return fmtTime(t); }).join('<br/>');
+                box.className = '';
+                box.style.color = '#1e8e5a';
+            } else {
+                box.textContent = '✗ ' + (d.error || '表达式非法');
+                box.style.color = '#c0392b';
+            }
+        } catch (err) { box.textContent = '预览请求失败'; box.style.color = '#c0392b'; }
+    }
+
+    function onOnceInput() { }
+
+    function onTypeChange() {
+        var type = document.getElementById('f-type').value;
+        document.getElementById('http-params').style.display = type === 'http' ? '' : 'none';
+        document.getElementById('mail-params').style.display = type === 'mail' ? '' : 'none';
+        document.getElementById('save-btn').disabled = type === 'mail';
+    }
+
+    function addHeaderRow(key, value) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px; max-width: 640px;';
+        row.innerHTML =
+            '<input class="h-key" type="text" placeholder="Header 名" style="flex:1; padding:7px 9px; border:1px solid #dcdde1; border-radius:4px;" value="' + escapeHtml(key) + '" />' +
+            '<input class="h-value" type="text" placeholder="值" style="flex:2; padding:7px 9px; border:1px solid #dcdde1; border-radius:4px;" value="' + escapeHtml(value) + '" />' +
+            '<button type="button" class="btn mini danger" onclick="this.parentNode.remove()">删</button>';
+        document.getElementById('header-rows').appendChild(row);
+    }
+
+    function fillHttpParams(params) {
+        document.getElementById('p-method').value = (params.method || 'GET').toUpperCase();
+        document.getElementById('p-url').value = params.url || '';
+        document.getElementById('p-body').value = params.body || '';
+        document.getElementById('p-success').value = params.successContains || '';
+        document.getElementById('header-rows').innerHTML = '';
+        var headers = params.headers || {};
+        var keys = Object.keys(headers);
+        if (keys.length === 0) addHeaderRow('', '');
+        keys.forEach(function (k) { addHeaderRow(k, headers[k]); });
+    }
+
+    function buildParams() {
+        if (document.getElementById('f-type').value !== 'http') return null;
+        var headers = {};
+        document.querySelectorAll('#header-rows .h-key').forEach(function (input, i) {
+            var key = input.value.trim();
+            var value = document.querySelectorAll('#header-rows .h-value')[i].value;
+            if (key) headers[key] = value;
+        });
+        return {
+            method: document.getElementById('p-method').value,
+            url: document.getElementById('p-url').value.trim(),
+            headers: headers,
+            body: document.getElementById('p-body').value,
+            successContains: document.getElementById('p-success').value
+        };
+    }
+
+    function buildCron() {
+        if (currentMode() === 'once') {
+            var v = document.getElementById('f-once').value;
+            if (!v) return null;
+            return 'once:' + v.replace('T', ' ');
+        }
+        var expr = document.getElementById('f-cron').value.trim();
+        return expr || null;
+    }
+
+    async function loadTask() {
+        if (!taskId) { fillHttpParams({}); return; }
+        document.getElementById('page-title').textContent = '编辑任务 #' + taskId;
+        var resp = await fetchApi('/api/tasks/' + taskId);
+        if (!resp.ok) { showFormError('任务加载失败：' + resp.status); return; }
+        var t = await resp.json();
+        document.getElementById('f-name').value = t.name;
+        document.getElementById('f-group').value = t.groupName || 'default';
+        document.getElementById('f-remark').value = t.remark || '';
+        document.getElementById('f-timeout').value = t.timeoutSec;
+        document.getElementById('f-retry').value = t.retryMax;
+        document.getElementById('f-enabled').value = String(t.enabled);
+        document.getElementById('f-type').value = t.taskType;
+        onTypeChange();
+
+        if (t.cron && t.cron.toLowerCase().indexOf('once:') === 0) {
+            document.querySelector('input[name="trigger-mode"][value="once"]').checked = true;
+            document.getElementById('f-once').value = t.cron.slice(5).trim().replace(' ', 'T');
+        } else {
+            document.querySelector('input[name="trigger-mode"][value="cron"]').checked = true;
+            document.getElementById('f-cron').value = t.cron;
+        }
+        onModeChange();
+
+        var params = {};
+        try { params = JSON.parse(t.params || '{}') || {}; } catch (e) { }
+        fillHttpParams(params);
+        schedulePreview();
+    }
+
+    async function save(e) {
+        e.preventDefault();
+        hideFormError();
+        if (document.getElementById('f-type').value === 'mail') {
+            showFormError('mail 执行器 M4 交付，当前不能保存'); return false;
+        }
+        var name = document.getElementById('f-name').value.trim();
+        if (!name) { showFormError('任务名称不能为空'); return false; }
+        var cron = buildCron();
+        if (!cron) { showFormError(currentMode() === 'once' ? '请选择 once 触发时间' : 'cron 表达式不能为空'); return false; }
+        var params = buildParams();
+        if (params && !params.url) { showFormError('http 参数缺少 url'); return false; }
+
+        var payload = {
+            name: name,
+            groupName: document.getElementById('f-group').value.trim() || 'default',
+            taskType: document.getElementById('f-type').value,
+            cron: cron,
+            params: JSON.stringify(params || {}),
+            timeoutSec: parseInt(document.getElementById('f-timeout').value) || 30,
+            retryMax: parseInt(document.getElementById('f-retry').value),
+            enabled: document.getElementById('f-enabled').value === '1',
+            remark: document.getElementById('f-remark').value.trim()
+        };
+
+        var saveBtn = document.getElementById('save-btn');
+        saveBtn.disabled = true;
+        try {
+            var resp = await fetchApi(taskId ? '/api/tasks/' + taskId : '/api/tasks', {
+                method: taskId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (resp.ok) { location.href = '/tasks'; return false; }
+            var d = await resp.json().catch(function () { return {}; });
+            showFormError(d.message || ('保存失败：' + resp.status));
+        } catch (err) {
+            if (err && err.message !== 'unauthorized') showFormError('网络错误，保存失败');
+        } finally {
+            saveBtn.disabled = false;
+        }
+        return false;
+    }
+
+    loadTask();
+</script>
+}

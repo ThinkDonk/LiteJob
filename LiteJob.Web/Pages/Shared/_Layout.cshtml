@@ -15,7 +15,6 @@
         .sidebar .brand { height: 56px; line-height: 56px; text-align: center; font-size: 18px; font-weight: 600; color: #fff; background: #272c37; }
         .sidebar nav a { display: block; padding: 12px 20px; color: #dcdde1; text-decoration: none; border-left: 3px solid transparent; }
         .sidebar nav a:hover { background: #3d4353; }
-        .sidebar nav a.active { background: #3d4353; border-left-color: #4b7bec; color: #fff; }
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .topbar { height: 56px; background: #fff; border-bottom: 1px solid #e1e4e8; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 24px; }
         .topbar .user { color: #57606f; }
@@ -27,6 +26,39 @@
         .card { background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; padding: 20px 24px; min-width: 180px; flex: 1; }
         .card .label { color: #747d8c; margin-bottom: 8px; }
         .card .value { font-size: 26px; font-weight: 600; color: #2f3542; }
+        .panel { background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; padding: 16px 20px; margin-bottom: 16px; }
+        .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+        .toolbar input, .toolbar select { padding: 7px 9px; border: 1px solid #dcdde1; border-radius: 4px; font-size: 13px; background: #fff; }
+        .toolbar input:focus, .toolbar select:focus { outline: none; border-color: #4b7bec; }
+        .toolbar label { color: #57606f; }
+        table.grid { width: 100%; border-collapse: collapse; background: #fff; }
+        table.grid th, table.grid td { border-bottom: 1px solid #f1f2f6; padding: 9px 10px; text-align: left; font-size: 13px; vertical-align: middle; }
+        table.grid th { color: #57606f; font-weight: 600; background: #fafbfc; white-space: nowrap; }
+        table.grid tbody tr:hover { background: #f5f8ff; }
+        table.grid tr.clickable { cursor: pointer; }
+        .btn { padding: 6px 12px; border: 1px solid #dcdde1; background: #fff; border-radius: 4px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-block; color: #2c3e50; }
+        .btn:hover { background: #f1f2f6; }
+        .btn.primary { background: #4b7bec; border-color: #4b7bec; color: #fff; }
+        .btn.primary:hover { background: #3867d6; }
+        .btn.danger { color: #c0392b; border-color: #f5b7b1; }
+        .btn.danger:hover { background: #fdecea; }
+        .btn.mini { padding: 3px 8px; font-size: 12px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+        .badge.green { background: #e8f8ef; color: #1e8e5a; }
+        .badge.red { background: #fdecea; color: #c0392b; }
+        .badge.gray { background: #f1f2f6; color: #57606f; }
+        .badge.blue { background: #e8f0fe; color: #2d6cdf; }
+        .badge.orange { background: #fef5e7; color: #ca8a04; }
+        .muted { color: #a4b0be; }
+        .pagination { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; color: #57606f; }
+        .form-item { margin-bottom: 14px; }
+        .form-item > label { display: block; margin-bottom: 6px; color: #57606f; }
+        .form-item input[type=text], .form-item input[type=number], .form-item input[type=datetime-local],
+        .form-item select, .form-item textarea { width: 100%; max-width: 460px; padding: 8px 10px; border: 1px solid #dcdde1; border-radius: 4px; font-size: 14px; font-family: inherit; }
+        .form-item input:focus, .form-item select:focus, .form-item textarea:focus { outline: none; border-color: #4b7bec; }
+        .section-title { font-size: 15px; font-weight: 600; margin: 18px 0 12px; padding-left: 8px; border-left: 3px solid #4b7bec; }
+        #global-error { display: none; margin-bottom: 12px; padding: 8px 12px; background: #fdecea; color: #c0392b; border: 1px solid #f5b7b1; border-radius: 4px; }
+        pre.code-block { background: #272c37; color: #dcdde1; padding: 12px; border-radius: 6px; font-size: 12px; overflow: auto; max-height: 400px; white-space: pre-wrap; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -35,8 +67,8 @@
             <div class="brand">LiteJob</div>
             <nav>
                 <a href="/">仪表盘</a>
-                <a href="#">任务</a>
-                <a href="#">执行记录</a>
+                <a href="/tasks">任务</a>
+                <a href="/runs">执行记录</a>
                 <a href="#">审计日志</a>
                 <a href="#">凭证</a>
                 <a href="#">告警通道</a>
@@ -58,6 +90,24 @@
         function logout() {
             fetch('/api/auth/logout', { method: 'POST' })
                 .finally(() => { location.href = '/login'; });
+        }
+        function pad(n) { return n < 10 ? '0' + n : '' + n; }
+        function fmtTime(s) {
+            if (!s) return '-';
+            var d = new Date(s);
+            if (isNaN(d.getTime())) return s;
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+        function fmtDuration(ms) {
+            if (ms === null || ms === undefined) return '-';
+            if (ms < 1000) return ms + 'ms';
+            if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+            return Math.floor(ms / 60000) + 'm' + Math.round((ms % 60000) / 1000) + 's';
+        }
+        async function fetchApi(url, options) {
+            var resp = await fetch(url, options);
+            if (resp.status === 401) { location.href = '/login'; throw new Error('unauthorized'); }
+            return resp;
         }
     </script>
     @await RenderSectionAsync("Scripts", required: false)

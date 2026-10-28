@@ -47,6 +47,7 @@ public sealed class TaskController : ControllerBase
         [FromQuery] int? enabled, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var (items, total) = await _taskRepository.GetPagedAsync(keyword, group, enabled, page, Math.Clamp(pageSize, 1, 100));
+        var runningIds = await _runRepository.GetRunningTaskIdsAsync();
         var result = items.Select(t => new
         {
             t.Id,
@@ -66,7 +67,8 @@ public sealed class TaskController : ControllerBase
             t.CreatedAt,
             t.UpdatedAt,
             t.NextPlannedAt,
-            nextTriggerAt = NextTriggerOf(t)
+            nextTriggerAt = NextTriggerOf(t),
+            isRunning = runningIds.Contains(t.Id)
         });
         return Ok(new { items = result, total });
     }
@@ -235,6 +237,19 @@ public sealed class TaskController : ControllerBase
 
         await _scheduler.TriggerNowAsync(id);
         return Accepted(new { accepted = true });
+    }
+
+    [HttpPost("{id:long}/copy")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> Copy(long id)
+    {
+        if (await _taskRepository.GetByIdAsync(id) is null)
+        {
+            return NotFound(new { message = "任务不存在" });
+        }
+
+        var copy = await _taskRepository.CopyAsync(id, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        return CreatedAtAction(nameof(GetById), new { id = copy.Id }, new { id = copy.Id, name = copy.Name });
     }
 
     private string? Validate(TaskUpsertRequest request)

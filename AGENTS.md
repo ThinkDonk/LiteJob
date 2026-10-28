@@ -27,7 +27,7 @@ LiteJob.Core/           类库（不依赖 ASP.NET Core，可单测）
   Scripts/               V1__init.sql、V2__*.sql（内嵌资源迁移脚本）
   Security/              LoginThrottler（登录失败锁定）
 LiteJob.Web/            宿主：Program.cs 组装、Api/ 控制器、Pages/ Razor 页面
-LiteJob.Core.Tests/     xunit 单测（当前 49 项，全绿为交付基线）
+LiteJob.Core.Tests/     xunit 单测（当前 67 项，全绿为交付基线）
 ```
 
 ## 开发约定（隐式契约）
@@ -45,13 +45,13 @@ LiteJob.Core.Tests/     xunit 单测（当前 49 项，全绿为交付基线）
 
 ```powershell
 dotnet build LiteJob.sln          # 0 警告 0 错误为基线
-dotnet test LiteJob.sln            # 49/49 全绿为基线
+dotnet test LiteJob.sln            # 67/67 全绿为基线
 cd LiteJob.Web; dotnet run         # http://localhost:5270（admin 初始密码见首启日志）
 ```
 
 ## 里程碑
 
-M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 管理页（任务列表/编辑/记录+CSV/仪表盘） · M4 邮件执行器+凭证 · M5 告警通知 · M6 开放 API+审计埋点+导入导出+Swagger
+M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 ✓ 管理页（任务列表/编辑+cron预览与复制/记录+CSV导出/仪表盘） · M4 邮件执行器+凭证 · M5 告警通知 · M6 开放 API+审计埋点+导入导出+Swagger
 
 ## 交付门槛
 
