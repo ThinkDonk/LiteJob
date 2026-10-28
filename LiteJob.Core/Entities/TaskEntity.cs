@@ -18,4 +18,5 @@ public class TaskEntity
     public string? UpdatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public DateTime? NextPlannedAt { get; set; }
 }

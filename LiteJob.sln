@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiteJob.Core", "LiteJob.Cor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiteJob.Web", "LiteJob.Web\LiteJob.Web.csproj", "{E11CDCE2-CB4E-4F07-ADBB-8E8C5214065A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiteJob.Core.Tests", "LiteJob.Core.Tests\LiteJob.Core.Tests.csproj", "{AE981AA7-C345-488F-B03E-50C2D7F744B1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{E11CDCE2-CB4E-4F07-ADBB-8E8C5214065A}.Release|x64.Build.0 = Release|Any CPU
 		{E11CDCE2-CB4E-4F07-ADBB-8E8C5214065A}.Release|x86.ActiveCfg = Release|Any CPU
 		{E11CDCE2-CB4E-4F07-ADBB-8E8C5214065A}.Release|x86.Build.0 = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|x64.Build.0 = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Debug|x86.Build.0 = Debug|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|x64.ActiveCfg = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|x64.Build.0 = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|x86.ActiveCfg = Release|Any CPU
+		{AE981AA7-C345-488F-B03E-50C2D7F744B1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

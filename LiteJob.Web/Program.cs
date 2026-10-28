@@ -1,5 +1,9 @@
 using LiteJob.Core.Db;
 using LiteJob.Core.Db.Migrations;
+using LiteJob.Core.Executors;
+using LiteJob.Core.Notify;
+using LiteJob.Core.Repositories;
+using LiteJob.Core.Scheduling;
 using LiteJob.Core.Security;
 using LiteJob.Web.Bootstrap;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -17,6 +21,18 @@ builder.Services.AddSingleton<SqliteConnectionFactory>(_ =>
 builder.Services.AddSingleton<LoginThrottler>();
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddHostedService<AdminSeeder>();
+
+builder.Services.AddHttpClient("executor", client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<ITaskExecutor>(sp =>
+    new HttpTaskExecutor(sp.GetRequiredService<IHttpClientFactory>().CreateClient("executor")));
+builder.Services.AddSingleton<ExecutorRegistry>();
+builder.Services.AddSingleton<INotifyDispatcher, NoopNotifyDispatcher>();
+builder.Services.AddSingleton<TaskRepository>();
+builder.Services.AddSingleton<RunRepository>();
+builder.Services.AddSingleton<ExecutionPipeline>();
+builder.Services.AddSingleton<SimpleTaskScheduler>();
+builder.Services.AddSingleton<ITaskScheduler>(sp => sp.GetRequiredService<SimpleTaskScheduler>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SimpleTaskScheduler>());
 
 var jwtKey = builder.Configuration["Security:JwtKey"]
     ?? throw new InvalidOperationException("缺少配置 Security:JwtKey");
