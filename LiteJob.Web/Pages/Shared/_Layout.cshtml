@@ -1,0 +1,65 @@
+@{
+    ViewData["Title"] = "LiteJob";
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 14px; color: #2c3e50; background: #f5f6fa; }
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 200px; background: #2f3542; color: #dcdde1; flex-shrink: 0; }
+        .sidebar .brand { height: 56px; line-height: 56px; text-align: center; font-size: 18px; font-weight: 600; color: #fff; background: #272c37; }
+        .sidebar nav a { display: block; padding: 12px 20px; color: #dcdde1; text-decoration: none; border-left: 3px solid transparent; }
+        .sidebar nav a:hover { background: #3d4353; }
+        .sidebar nav a.active { background: #3d4353; border-left-color: #4b7bec; color: #fff; }
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .topbar { height: 56px; background: #fff; border-bottom: 1px solid #e1e4e8; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 24px; }
+        .topbar .user { color: #57606f; }
+        .topbar button { padding: 6px 14px; border: 1px solid #dcdde1; background: #fff; border-radius: 4px; cursor: pointer; }
+        .topbar button:hover { background: #f1f2f6; }
+        .content { padding: 24px; flex: 1; }
+        h2.page-title { margin-bottom: 16px; font-size: 20px; }
+        .cards { display: flex; gap: 16px; flex-wrap: wrap; }
+        .card { background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; padding: 20px 24px; min-width: 180px; flex: 1; }
+        .card .label { color: #747d8c; margin-bottom: 8px; }
+        .card .value { font-size: 26px; font-weight: 600; color: #2f3542; }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">LiteJob</div>
+            <nav>
+                <a href="/">仪表盘</a>
+                <a href="#">任务</a>
+                <a href="#">执行记录</a>
+                <a href="#">审计日志</a>
+                <a href="#">凭证</a>
+                <a href="#">告警通道</a>
+                <a href="#">系统配置</a>
+                <a href="#">用户管理</a>
+            </nav>
+        </aside>
+        <div class="main">
+            <header class="topbar">
+                <span class="user">@Model.Username</span>
+                <button type="button" onclick="logout()">退出</button>
+            </header>
+            <main class="content">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+    <script>
+        function logout() {
+            fetch('/api/auth/logout', { method: 'POST' })
+                .finally(() => { location.href = '/login'; });
+        }
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

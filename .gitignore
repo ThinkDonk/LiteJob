@@ -1,0 +1,16 @@
+# 设计文档不参与提交
+docs/
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+TestResults/
+
+# 运行时数据（SQLite 与备份）
+*.db
+*.db-shm
+*.db-wal
+backup/

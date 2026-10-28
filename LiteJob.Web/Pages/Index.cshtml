@@ -1,0 +1,18 @@
+@page
+@model LiteJob.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "仪表盘 - LiteJob";
+    Layout = "_Layout";
+}
+
+<h2 class="page-title">仪表盘</h2>
+
+<p style="margin-bottom: 20px;">欢迎，@Model.Username！LiteJob 调度中心运行中（M1 骨架，以下为占位卡片）。</p>
+
+<div class="cards">
+    <div class="card"><div class="label">任务总数</div><div class="value">--</div></div>
+    <div class="card"><div class="label">启用任务</div><div class="value">--</div></div>
+    <div class="card"><div class="label">今日执行</div><div class="value">--</div></div>
+    <div class="card"><div class="label">成功率</div><div class="value">--</div></div>
+    <div class="card"><div class="label">内核健康</div><div class="value">--</div></div>
+</div>
