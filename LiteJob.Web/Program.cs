@@ -9,7 +9,6 @@ using LiteJob.Web.Bootstrap;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -22,9 +21,22 @@ builder.Services.AddSingleton<LoginThrottler>();
 builder.Services.AddSingleton<MigrationRunner>();
 builder.Services.AddHostedService<AdminSeeder>();
 
+builder.Services.AddSingleton<CryptoService>(_ => new CryptoService(builder.Configuration["Security:AesKey"]
+    ?? throw new InvalidOperationException("缺少配置 Security:AesKey")));
+builder.Services.AddSingleton<CredentialRepository>();
+builder.Services.AddSingleton<ConfigRepository>();
+builder.Services.AddSingleton<CredentialResolver>();
 builder.Services.AddHttpClient("executor", client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<HttpAuthHelper>(sp =>
+    new HttpAuthHelper(sp.GetRequiredService<IHttpClientFactory>().CreateClient("executor")));
 builder.Services.AddSingleton<ITaskExecutor>(sp =>
-    new HttpTaskExecutor(sp.GetRequiredService<IHttpClientFactory>().CreateClient("executor")));
+    new HttpTaskExecutor(sp.GetRequiredService<IHttpClientFactory>().CreateClient("executor"),
+        sp.GetRequiredService<CredentialResolver>(), sp.GetRequiredService<HttpAuthHelper>()));
+builder.Services.AddHttpClient<MailAttachmentCollector>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<ITaskExecutor>(sp =>
+    new MailTaskExecutor(sp.GetRequiredService<MailAttachmentCollector>(),
+        sp.GetRequiredService<ConfigRepository>(), sp.GetRequiredService<CryptoService>(),
+        sp.GetRequiredService<CredentialResolver>(), sp.GetRequiredService<ILogger<MailTaskExecutor>>()));
 builder.Services.AddSingleton<ExecutorRegistry>();
 builder.Services.AddSingleton<INotifyDispatcher, NoopNotifyDispatcher>();
 builder.Services.AddSingleton<TaskRepository>();

@@ -27,7 +27,7 @@ LiteJob.Core/           类库（不依赖 ASP.NET Core，可单测）
   Scripts/               V1__init.sql、V2__*.sql（内嵌资源迁移脚本）
   Security/              LoginThrottler（登录失败锁定）
 LiteJob.Web/            宿主：Program.cs 组装、Api/ 控制器、Pages/ Razor 页面
-LiteJob.Core.Tests/     xunit 单测（当前 67 项，全绿为交付基线）
+LiteJob.Core.Tests/     xunit 单测（当前 101 项，全绿为交付基线）
 ```
 
 ## 开发约定（隐式契约）
@@ -39,19 +39,20 @@ LiteJob.Core.Tests/     xunit 单测（当前 67 项，全绿为交付基线）
 - **调度三纪律**（改内核前必读 §3.1）：循环单次迭代异常隔离（try-catch 不得逃逸）；等待用 SemaphoreSlim 可唤醒（改 cron/启停立即生效）；每任务 `SemaphoreSlim(1,1)` 不并发，TryEnter 失败记 `skipped`
 - **认证**：JWT HS256 8h，Authorization header 优先、`lj_token` HttpOnly cookie 兜底；写操作 `[Authorize(Roles="admin")]`；登录审计写 t_audit_log（业务审计埋点属 M6）
 - **执行质量**：超时 CTS 在统一管道（ExecutionPipeline）不在执行器；重试退避 30s/2m/8m，退避函数构造可注入（测试用毫秒级）；result/error 截断 2000 字符
-- **凭据**：任何密钥/密码不明文入库（AES-256-GCM，M4 起实现；现有 JwtKey/AesKey/ApiKey 在 appsettings，部署必须更换）
+- **凭据**：任何密钥/密码不明文入库。AES-256-GCM（CryptoService，密文=base64(nonce||cipher||tag)），**加密收敛在 repository 层**（controller 传明文）；`$cred:<name>.<key>` 引用语法，处理顺序固定：TemplateEngine 插值 → CredentialResolver 解析 → 发送；http 附件 `credentialId` 注入规则：取凭证 JSON 的 `key`→`token`→`apikey` 首个存在字段作 Bearer 值，都无则整体序列化值；MailKit 是唯一 SMTP 通道；脱敏统一走 Masker（result/error 中敏感头与 token 全掩码）
+- **AesKey**：appsettings 中的值是开发密钥（已入 git），生产部署必须生成新 32 字节 base64 更换
 
 ## 常用命令
 
 ```powershell
 dotnet build LiteJob.sln          # 0 警告 0 错误为基线
-dotnet test LiteJob.sln            # 67/67 全绿为基线
+dotnet test LiteJob.sln            # 101/101 全绿为基线
 cd LiteJob.Web; dotnet run         # http://localhost:5270（admin 初始密码见首启日志）
 ```
 
 ## 里程碑
 
-M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 ✓ 管理页（任务列表/编辑+cron预览与复制/记录+CSV导出/仪表盘） · M4 邮件执行器+凭证 · M5 告警通知 · M6 开放 API+审计埋点+导入导出+Swagger
+M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 ✓ 管理页（任务列表/编辑+cron预览与复制/记录+CSV导出/仪表盘） · M4 ✓ 邮件执行器+凭证体系（AES-GCM/$cred/声明式登录/脱敏/SMTP配置） · M5 告警通知 · M6 开放 API+审计埋点+导入导出+Swagger
 
 ## 交付门槛
 

@@ -84,7 +84,7 @@
                 <input id="p-url" type="text" placeholder="http://..." />
             </div>
             <div class="form-item">
-                <label>headers（支持 {date} 等模板变量）</label>
+                <label>headers（支持 {date} 等模板变量与 $cred:名称.key 凭证引用）</label>
                 <div id="header-rows"></div>
                 <button type="button" class="btn mini" onclick="addHeaderRow('', '')">＋ 添加 Header</button>
             </div>
@@ -96,9 +96,41 @@
                 <label>successContains（可选：响应体包含此串才算成功，留空则 2xx 即成功）</label>
                 <input id="p-success" type="text" />
             </div>
+            <div class="form-item">
+                <label>auth 块（可选：声明式登录换 token，JSON 对象）</label>
+                <textarea id="p-auth" rows="3" placeholder='{"type":"login","loginUrl":"http://wms/login","loginBody":{"u":"$cred:wms.user"},"tokenPath":"$.data.accessToken","injectAs":"Authorization: Bearer {token}"}'></textarea>
+                <div class="muted" style="font-size:12px; margin-top:4px;">留空不启用。loginBody 的值支持 $cred 引用。</div>
+            </div>
         </div>
-        <div id="mail-params" style="display:none; padding: 12px; background: #fef5e7; border: 1px solid #f9e2b3; border-radius: 4px; color: #8a6d3b;">
-            邮件执行器在 M4 里程碑交付，当前版本选择 mail 将无法保存。
+        <div id="mail-params">
+            <div style="display:flex; gap: 24px; flex-wrap: wrap;">
+                <div class="form-item" style="flex:2; min-width: 240px;">
+                    <label>收件人 to *（多个用逗号分隔）</label>
+                    <input id="m-to" type="text" placeholder="a@example.com, b@example.com" />
+                </div>
+                <div class="form-item" style="flex:2; min-width: 240px;">
+                    <label>抄送 cc（选填，逗号分隔）</label>
+                    <input id="m-cc" type="text" />
+                </div>
+            </div>
+            <div class="form-item">
+                <label>主题（支持 {date} 等模板变量）</label>
+                <input id="m-subject" type="text" placeholder="WMS 库存日报 {date}" />
+            </div>
+            <div class="form-item">
+                <label>
+                    <input id="m-html" type="checkbox" /> 正文为 HTML
+                </label>
+            </div>
+            <div class="form-item">
+                <label>正文</label>
+                <textarea id="m-body" rows="5" placeholder="详见附件"></textarea>
+            </div>
+            <div class="form-item">
+                <label>附件（缺失时：勾选 optional 则跳过该附件，否则任务失败）</label>
+                <div id="attach-rows"></div>
+                <button type="button" class="btn mini" onclick="addAttachRow()">＋ 添加附件</button>
+            </div>
         </div>
     </div>
 
@@ -198,7 +230,90 @@
         var type = document.getElementById('f-type').value;
         document.getElementById('http-params').style.display = type === 'http' ? '' : 'none';
         document.getElementById('mail-params').style.display = type === 'mail' ? '' : 'none';
-        document.getElementById('save-btn').disabled = type === 'mail';
+        document.getElementById('save-btn').disabled = false;
+    }
+
+    var credentialNames = [];
+
+    async function loadCredentialOptions() {
+        try {
+            var resp = await fetchApi('/api/credentials');
+            if (!resp.ok) return;
+            var data = await resp.json();
+            credentialNames = data.items.map(function (c) { return c.name; });
+        } catch (err) { }
+    }
+
+    function attachRowHtml(att) {
+        att = att || {};
+        var typeOptions = '<option value="file"' + (att.type === 'file' ? ' selected' : '') + '>file</option>' +
+            '<option value="http"' + (att.type === 'http' ? ' selected' : '') + '>http</option>';
+        var credOptions = '<option value="">credentialId（选填）</option>' + credentialNames.map(function (n) {
+            return '<option value="' + escapeHtml(n) + '"' + (att.credentialId === n ? ' selected' : '') + '>' + escapeHtml(n) + '</option>';
+        }).join('');
+        var pathLabel = att.type === 'http' ? 'URL' : '文件路径';
+        return '<div class="attach-row" style="display:flex; gap:6px; margin-bottom:6px; align-items:center; flex-wrap:wrap;">' +
+            '<select class="a-type" onchange="onAttachTypeChange(this)">' + typeOptions + '</select>' +
+            '<input class="a-path" type="text" placeholder="' + pathLabel + '（支持 {date} 变量）" style="flex:2; min-width: 200px; padding:7px 9px; border:1px solid #dcdde1; border-radius:4px;" value="' + escapeHtml(att.path || att.url || '') + '" />' +
+            '<label style="white-space:nowrap; font-size:12px;"><input class="a-optional" type="checkbox"' + (att.optional ? ' checked' : '') + ' /> optional</label>' +
+            '<select class="a-cred" style="max-width: 150px;">' + credOptions + '</select>' +
+            '<button type="button" class="btn mini danger" onclick="this.parentNode.remove()">删</button>' +
+            '</div>';
+    }
+
+    function onAttachTypeChange(select) {
+        var row = select.parentNode;
+        var isHttp = select.value === 'http';
+        var path = row.querySelector('.a-path');
+        path.placeholder = isHttp ? 'URL（支持 {date} 变量）' : '文件路径（支持 {date} 变量）';
+    }
+
+    function addAttachRow(att) {
+        var container = document.getElementById('attach-rows');
+        container.insertAdjacentHTML('beforeend', attachRowHtml(att));
+    }
+
+    function collectAttachments() {
+        var result = [];
+        document.querySelectorAll('#attach-rows .attach-row').forEach(function (row) {
+            var type = row.querySelector('.a-type').value;
+            var path = row.querySelector('.a-path').value.trim();
+            var optional = row.querySelector('.a-optional').checked;
+            var credId = row.querySelector('.a-cred').value;
+            if (!path) return;
+            if (type === 'file') {
+                result.push({ type: 'file', path: path, optional: optional });
+            } else {
+                var item = { type: 'http', url: path, optional: optional };
+                if (credId) item.credentialId = credId;
+                result.push(item);
+            }
+        });
+        return result;
+    }
+
+    function fillMailParams(params) {
+        document.getElementById('m-to').value = (params.to || []).join(', ');
+        document.getElementById('m-cc').value = (params.cc || []).join(', ');
+        document.getElementById('m-subject').value = params.subject || '';
+        document.getElementById('m-body').value = params.body || '';
+        document.getElementById('m-html').checked = params.bodyIsHtml === true;
+        document.getElementById('attach-rows').innerHTML = '';
+        (params.attachments || []).forEach(function (a) { addAttachRow(a); });
+    }
+
+    function collectMailParams() {
+        var splitAddresses = function (text) {
+            return text.split(/[,;，；]/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+        };
+        return {
+            to: splitAddresses(document.getElementById('m-to').value),
+            cc: splitAddresses(document.getElementById('m-cc').value),
+            subject: document.getElementById('m-subject').value,
+            body: document.getElementById('m-body').value,
+            bodyIsHtml: document.getElementById('m-html').checked,
+            attachments: collectAttachments()
+        };
     }
 
     function addHeaderRow(key, value) {
@@ -216,6 +331,7 @@
         document.getElementById('p-url').value = params.url || '';
         document.getElementById('p-body').value = params.body || '';
         document.getElementById('p-success').value = params.successContains || '';
+        document.getElementById('p-auth').value = params.auth ? JSON.stringify(params.auth, null, 2) : '';
         document.getElementById('header-rows').innerHTML = '';
         var headers = params.headers || {};
         var keys = Object.keys(headers);
@@ -223,21 +339,29 @@
         keys.forEach(function (k) { addHeaderRow(k, headers[k]); });
     }
 
-    function buildParams() {
-        if (document.getElementById('f-type').value !== 'http') return null;
+    function buildHttpParams() {
         var headers = {};
         document.querySelectorAll('#header-rows .h-key').forEach(function (input, i) {
             var key = input.value.trim();
             var value = document.querySelectorAll('#header-rows .h-value')[i].value;
             if (key) headers[key] = value;
         });
-        return {
+        var params = {
             method: document.getElementById('p-method').value,
             url: document.getElementById('p-url').value.trim(),
             headers: headers,
             body: document.getElementById('p-body').value,
             successContains: document.getElementById('p-success').value
         };
+        var authText = document.getElementById('p-auth').value.trim();
+        if (authText) {
+            try {
+                params.auth = JSON.parse(authText);
+            } catch (e) {
+                return { error: 'auth 块不是合法 JSON：' + e.message };
+            }
+        }
+        return params;
     }
 
     function buildCron() {
@@ -251,7 +375,8 @@
     }
 
     async function loadTask() {
-        if (!taskId) { fillHttpParams({}); return; }
+        loadCredentialOptions();
+        if (!taskId) { fillHttpParams({}); addAttachRow({ type: 'file', optional: false }); return; }
         document.getElementById('page-title').textContent = '编辑任务 #' + taskId;
         var resp = await fetchApi('/api/tasks/' + taskId);
         if (!resp.ok) { showFormError('任务加载失败：' + resp.status); return; }
@@ -276,27 +401,37 @@
 
         var params = {};
         try { params = JSON.parse(t.params || '{}') || {}; } catch (e) { }
-        fillHttpParams(params);
+        if (t.taskType === 'mail') {
+            fillMailParams(params);
+        } else {
+            fillHttpParams(params);
+        }
         schedulePreview();
     }
 
     async function save(e) {
         e.preventDefault();
         hideFormError();
-        if (document.getElementById('f-type').value === 'mail') {
-            showFormError('mail 执行器 M4 交付，当前不能保存'); return false;
-        }
+        var taskType = document.getElementById('f-type').value;
         var name = document.getElementById('f-name').value.trim();
         if (!name) { showFormError('任务名称不能为空'); return false; }
         var cron = buildCron();
         if (!cron) { showFormError(currentMode() === 'once' ? '请选择 once 触发时间' : 'cron 表达式不能为空'); return false; }
-        var params = buildParams();
-        if (params && !params.url) { showFormError('http 参数缺少 url'); return false; }
+
+        var params;
+        if (taskType === 'mail') {
+            params = collectMailParams();
+            if (params.to.length === 0) { showFormError('mail 参数缺少收件人 to'); return false; }
+        } else {
+            params = buildHttpParams();
+            if (params && params.error) { showFormError(params.error); return false; }
+            if (params && !params.url) { showFormError('http 参数缺少 url'); return false; }
+        }
 
         var payload = {
             name: name,
             groupName: document.getElementById('f-group').value.trim() || 'default',
-            taskType: document.getElementById('f-type').value,
+            taskType: taskType,
             cron: cron,
             params: JSON.stringify(params || {}),
             timeoutSec: parseInt(document.getElementById('f-timeout').value) || 30,
