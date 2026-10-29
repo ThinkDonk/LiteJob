@@ -37,8 +37,14 @@ builder.Services.AddSingleton<ITaskExecutor>(sp =>
     new MailTaskExecutor(sp.GetRequiredService<MailAttachmentCollector>(),
         sp.GetRequiredService<ConfigRepository>(), sp.GetRequiredService<CryptoService>(),
         sp.GetRequiredService<CredentialResolver>(), sp.GetRequiredService<ILogger<MailTaskExecutor>>()));
+builder.Services.AddSingleton<INotifyDispatcher, RealNotifyDispatcher>();
+builder.Services.AddSingleton<NotifyChannelRepository>();
+builder.Services.AddHttpClient("notify", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<NotifySender>(sp =>
+    new NotifySender(sp.GetRequiredService<IHttpClientFactory>().CreateClient("notify"),
+        sp.GetRequiredService<NotifyChannelRepository>(),
+        sp.GetRequiredService<ILogger<NotifySender>>()));
 builder.Services.AddSingleton<ExecutorRegistry>();
-builder.Services.AddSingleton<INotifyDispatcher, NoopNotifyDispatcher>();
 builder.Services.AddSingleton<TaskRepository>();
 builder.Services.AddSingleton<RunRepository>();
 builder.Services.AddSingleton<ExecutionPipeline>();

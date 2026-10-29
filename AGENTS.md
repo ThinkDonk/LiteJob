@@ -27,7 +27,7 @@ LiteJob.Core/           类库（不依赖 ASP.NET Core，可单测）
   Scripts/               V1__init.sql、V2__*.sql（内嵌资源迁移脚本）
   Security/              LoginThrottler（登录失败锁定）
 LiteJob.Web/            宿主：Program.cs 组装、Api/ 控制器、Pages/ Razor 页面
-LiteJob.Core.Tests/     xunit 单测（当前 112 项，全绿为交付基线）
+LiteJob.Core.Tests/     xunit 单测（当前 133 项，全绿为交付基线）
 ```
 
 ## 开发约定（隐式契约）
@@ -46,14 +46,14 @@ LiteJob.Core.Tests/     xunit 单测（当前 112 项，全绿为交付基线）
 
 ```powershell
 dotnet build LiteJob.sln --no-incremental   # 必须带 --no-incremental：增量构建会掩盖编译警告（M4 交付事故）；0 警告 0 错误为基线
-dotnet test LiteJob.sln            # 112/112 全绿为基线
+dotnet test LiteJob.sln            # 133/133 全绿为基线
 cd LiteJob.Web; dotnet run         # http://localhost:5270（admin 初始密码见首启日志）
 ```
 
 ## 里程碑
 
-M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 ✓ 管理页（任务列表/编辑+cron预览与复制/记录+CSV导出/仪表盘） · M4 ✓ 邮件执行器+凭证体系（AES-GCM/$cred/声明式登录/脱敏/SMTP配置） · M5 告警通知 · M6 开放 API+审计埋点+导入导出+Swagger
+M1 ✓ 骨架 · M2 ✓ 调度内核+HTTP · M3 ✓ 管理页（任务列表/编辑+cron预览与复制/记录+CSV导出/仪表盘） · M4 ✓ 邮件执行器+凭证体系（AES-GCM/$cred/声明式登录/脱敏/SMTP配置） · M5 ✓ 告警通知（四平台/钉钉加签/notify_policy/恢复通知/通道健康） · M6 开放 API+审计埋点+导入导出+Swagger
 
 ## 交付门槛
 
-任何代码改动后：`dotnet build --no-incremental` 0 警告 0 错误 **且** `dotnet test` 全绿才可交付；涉及时序的用例禁止依赖运行时刻（固定显式时间戳——08:00-10:00 窗口事故教训）；禁止真实长等待。
+任何代码改动后：`dotnet build --no-incremental` 0 警告 0 错误 **且** `dotnet test` 全绿才可交付；涉及时序的用例禁止依赖运行时刻（固定显式时间戳——08:00-10:00 窗口事故教训）；禁止真实长等待；**断言时序**——异步落库/管道的终态（run.status、健康状态）必须轮询至终态值再断言，禁止"触发事实成立（调用计数/中间状态行出现）即断言终态"（冷启动 JIT 竞态事故教训）；时间字段字符串断言用正则结构断言或 NotNull，禁止双侧取运行时刻全等比较。

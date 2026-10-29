@@ -16,12 +16,15 @@ public sealed class DashboardController : ControllerBase
     private readonly TaskRepository _taskRepository;
     private readonly RunRepository _runRepository;
     private readonly ITaskScheduler _scheduler;
+    private readonly NotifyChannelRepository _channelRepository;
 
-    public DashboardController(TaskRepository taskRepository, RunRepository runRepository, ITaskScheduler scheduler)
+    public DashboardController(TaskRepository taskRepository, RunRepository runRepository,
+        ITaskScheduler scheduler, NotifyChannelRepository channelRepository)
     {
         _taskRepository = taskRepository;
         _runRepository = runRepository;
         _scheduler = scheduler;
+        _channelRepository = channelRepository;
     }
 
     [HttpGet]
@@ -31,6 +34,7 @@ public sealed class DashboardController : ControllerBase
         var (todayRuns, todaySuccess) = await _runRepository.GetTodayStatsAsync();
         var health = _scheduler.GetHealth();
         var failures = await _runRepository.GetRecentFailuresAsync(RecentFailureCount);
+        var channels = await _channelRepository.ListAsync();
 
         double? todaySuccessRate = todayRuns == 0
             ? null
@@ -54,6 +58,14 @@ public sealed class DashboardController : ControllerBase
                 taskName = f.TaskName,
                 finishedAt = f.FinishedAt,
                 error = f.Error is not null && f.Error.Length > ErrorPreviewLength ? f.Error[..ErrorPreviewLength] : f.Error
+            }),
+            channelsHealth = channels.Select(c => new
+            {
+                name = c.Name,
+                type = c.Type,
+                enabled = c.Enabled == 1,
+                lastStatus = c.LastStatus,
+                lastSentAt = c.LastSentAt
             })
         });
     }

@@ -66,13 +66,17 @@ public class SimpleTaskSchedulerTests : IAsyncDisposable
 
         using var cts = new CancellationTokenSource();
         await scheduler.StartAsync(cts.Token);
-        for (var i = 0; i < 200 && _executor.Calls == 0; i++)
+        var run = (TaskRunEntity?)null;
+        for (var i = 0; i < 400 && (run is null || run.Status != "success"); i++)
         {
-            await Task.Delay(25);
+            run = await GetLatestRunAsync(task.Id);
+            if (run is null || run.Status != "success")
+            {
+                await Task.Delay(25);
+            }
         }
 
         Assert.True(_executor.Calls >= 1, $"执行次数 {_executor.Calls} 应 >= 1");
-        var run = await GetLatestRunAsync(task.Id);
         Assert.NotNull(run);
         Assert.Equal("success", run!.Status);
 
@@ -92,13 +96,17 @@ public class SimpleTaskSchedulerTests : IAsyncDisposable
         Assert.Equal(1, scheduler.GetHealth().HeapSize);
 
         await scheduler.TriggerNowAsync(task.Id);
-        for (var i = 0; i < 100 && await CountRunsAsync(task.Id) == 0; i++)
+        var run = (TaskRunEntity?)null;
+        for (var i = 0; i < 200 && (run is null || run.Status != "success"); i++)
         {
-            await Task.Delay(20);
+            run = await GetLatestRunAsync(task.Id);
+            if (run is null || run.Status != "success")
+            {
+                await Task.Delay(25);
+            }
         }
 
         Assert.True(_executor.Calls >= 1, $"执行次数 {_executor.Calls} 应 >= 1");
-        var run = await GetLatestRunAsync(task.Id);
         Assert.NotNull(run);
         Assert.Equal("success", run!.Status);
 

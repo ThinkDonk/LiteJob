@@ -152,6 +152,24 @@ public sealed class RunRepository
         return (whereSql, parameters);
     }
 
+    public async Task<int> GetConsecutiveFailureCountAsync(long taskId)
+    {
+        await using var conn = await _factory.CreateOpenConnectionAsync();
+        var statuses = await conn.QueryAsync<string>(
+            "SELECT status FROM t_task_run WHERE task_id=@TaskId ORDER BY id DESC LIMIT 200;",
+            new { TaskId = taskId });
+        var count = 0;
+        foreach (var status in statuses)
+        {
+            if (status != "failed")
+            {
+                break;
+            }
+            count++;
+        }
+        return count;
+    }
+
     public async Task<int> MarkInterruptedRunningAsync()
     {
         await using var conn = await _factory.CreateOpenConnectionAsync();

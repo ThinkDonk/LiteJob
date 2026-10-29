@@ -159,6 +159,7 @@ public sealed class TaskController : ControllerBase
         updated.UpdatedBy = CurrentUsername();
         updated.UpdatedAt = DateTime.Now;
         updated.NextPlannedAt = task.NextPlannedAt;
+        updated.LastRunSuccess = task.LastRunSuccess;
 
         try
         {
