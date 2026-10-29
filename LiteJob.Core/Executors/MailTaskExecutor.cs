@@ -35,8 +35,9 @@ public sealed class MailTaskExecutor : ITaskExecutor
 
     public async Task<ExecutorResult> ExecuteAsync(TaskEntity task, DateTime triggerAt, CancellationToken ct)
     {
+        var bag = new SensitiveValueBag();
         var interpolated = TemplateEngine.InterpolateParams(task.Params, triggerAt);
-        var resolved = await _credentialResolver.ResolveParamsAsync(interpolated);
+        var resolved = await _credentialResolver.ResolveParamsAsync(interpolated, bag);
 
         using var doc = JsonDocument.Parse(resolved);
         var root = doc.RootElement;

@@ -26,10 +26,11 @@ public sealed class HttpTaskExecutor : ITaskExecutor
 
     public async Task<ExecutorResult> ExecuteAsync(TaskEntity task, DateTime triggerAt, CancellationToken ct)
     {
+        var bag = new SensitiveValueBag();
         var interpolated = TemplateEngine.InterpolateParams(task.Params, triggerAt);
         var resolved = _credentialResolver is null
             ? interpolated
-            : await _credentialResolver.ResolveParamsAsync(interpolated);
+            : await _credentialResolver.ResolveParamsAsync(interpolated, bag);
 
         using var doc = JsonDocument.Parse(resolved);
         var root = doc.RootElement;
@@ -76,6 +77,7 @@ public sealed class HttpTaskExecutor : ITaskExecutor
             var (authName, authValue) = await _authHelper.GetHeaderAsync(authEl, ct);
             request.Headers.TryAddWithoutValidation(authName, authValue);
             appliedHeaders[authName] = authValue;
+            bag.Register(authValue);
             authPreview = $"{authName}: {Masker.MaskToken(authValue)}";
         }
 
@@ -86,7 +88,7 @@ public sealed class HttpTaskExecutor : ITaskExecutor
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);
-        var snapshot = Truncate(responseBody);
+        var snapshot = Truncate(bag.Apply(responseBody));
 
         if (!response.IsSuccessStatusCode)
         {

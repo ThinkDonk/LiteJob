@@ -18,6 +18,11 @@ public sealed class CredentialResolver
 
     public async Task<string> ResolveAsync(string input)
     {
+        return await ResolveAsync(input, bag: null);
+    }
+
+    public async Task<string> ResolveAsync(string input, SensitiveValueBag? bag)
+    {
         if (string.IsNullOrEmpty(input) || !input.Contains("$cred:"))
         {
             return input;
@@ -32,6 +37,7 @@ public sealed class CredentialResolver
             if (!resolved.ContainsKey(cacheKey))
             {
                 resolved[cacheKey] = await ResolveCredentialAsync(name, key);
+                bag?.Register(resolved[cacheKey]);
             }
         }
 
@@ -46,6 +52,11 @@ public sealed class CredentialResolver
 
     public async Task<string> ResolveParamsAsync(string paramsJson)
     {
+        return await ResolveParamsAsync(paramsJson, bag: null);
+    }
+
+    public async Task<string> ResolveParamsAsync(string paramsJson, SensitiveValueBag? bag)
+    {
         if (string.IsNullOrWhiteSpace(paramsJson) || !paramsJson.Contains("$cred:"))
         {
             return paramsJson;
@@ -57,11 +68,11 @@ public sealed class CredentialResolver
             return paramsJson;
         }
 
-        await ApplyAsync(node);
+        await ApplyAsync(node, bag);
         return node.ToJsonString();
     }
 
-    private async Task ApplyAsync(JsonNode node)
+    private async Task ApplyAsync(JsonNode node, SensitiveValueBag? bag)
     {
         switch (node)
         {
@@ -70,7 +81,7 @@ public sealed class CredentialResolver
                 {
                     if (property.Value is not null)
                     {
-                        await ApplyAsync(property.Value);
+                        await ApplyAsync(property.Value, bag);
                     }
                 }
                 break;
@@ -79,14 +90,15 @@ public sealed class CredentialResolver
                 {
                     if (item is not null)
                     {
-                        await ApplyAsync(item);
+                        await ApplyAsync(item, bag);
                     }
                 }
                 break;
             case JsonValue value:
                 if (value.TryGetValue<string>(out var text) && text.Contains("$cred:"))
                 {
-                    value.ReplaceWith(JsonValue.Create(await ResolveAsync(text)));
+                    var resolved = await ResolveAsync(text, bag);
+                    value.ReplaceWith(JsonValue.Create(resolved));
                 }
                 break;
         }

@@ -71,9 +71,14 @@ public sealed class MailAttachmentCollector
                             request.Headers.TryAddWithoutValidation(headerName, headerValue);
                         }
                         else if (attachment.TryGetProperty("credentialId", out var credEl)
-                            && !string.IsNullOrWhiteSpace(credEl.GetString()))
+                            && credEl.ValueKind is not JsonValueKind.Null)
                         {
-                            var token = await ResolveCredentialTokenAsync(credEl.GetString()!);
+                            var token = credEl.ValueKind switch
+                            {
+                                JsonValueKind.String => await ResolveCredentialTokenAsync(credEl.GetString()!),
+                                JsonValueKind.Number => await ResolveCredentialTokenByIdAsync(credEl.GetInt64()),
+                                _ => throw new ExecutorException("credentialId 仅支持凭证名称(字符串)或数字 id")
+                            };
                             request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
                         }
 
@@ -110,11 +115,22 @@ public sealed class MailAttachmentCollector
     public async Task<string> ResolveCredentialTokenAsync(string credentialName)
     {
         var plainJson = await _credentialRepository.GetDecryptedJsonByNameAsync(credentialName);
+        return ExtractTokenFromPlainJson(plainJson, credentialName);
+    }
+
+    public async Task<string> ResolveCredentialTokenByIdAsync(long credentialId)
+    {
+        var plainJson = await _credentialRepository.GetDecryptedJsonByIdAsync(credentialId);
+        return ExtractTokenFromPlainJson(plainJson, $"#{credentialId}");
+    }
+
+    private static string ExtractTokenFromPlainJson(string plainJson, string context)
+    {
         JsonObject obj;
         try
         {
             obj = JsonNode.Parse(plainJson) as JsonObject
-                ?? throw new InvalidOperationException($"凭证 {credentialName} 的明文不是 JSON 对象");
+                ?? throw new InvalidOperationException($"凭证 {context} 的明文不是 JSON 对象");
         }
         catch (InvalidOperationException)
         {
@@ -122,7 +138,7 @@ public sealed class MailAttachmentCollector
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"凭证 {credentialName} 的明文 JSON 解析失败：{ex.Message}", ex);
+            throw new InvalidOperationException($"凭证 {context} 的明文 JSON 解析失败：{ex.Message}", ex);
         }
 
         foreach (var candidate in new[] { "key", "token", "apikey" })
@@ -171,7 +187,7 @@ public sealed class MailAttachmentCollector
         return (name, extension);
     }
 
-    private static string ReadString(JsonElement element, string name)
+    private static string? ReadString(JsonElement element, string name)
     {
         return element.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String
             ? el.GetString()

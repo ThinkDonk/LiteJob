@@ -71,6 +71,7 @@ public class RunRepositoryTests : IAsyncDisposable
         await SetCreatedAtAsync(rTodayMorning, today.AddHours(9));
 
         var rTodayNoon = await repository.InsertRunningAsync(1, "noon-run", today.AddHours(12));
+        await SetCreatedAtAsync(rTodayNoon, today.AddHours(12));
         Assert.True(rTodayNoon > 0);
 
         var (all, allTotal) = await repository.GetPagedAsync(null, null, 1, 50);

@@ -183,6 +183,42 @@ public class MailAttachmentCollectorTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CredentialId_As_Number_Id_Injects_Bearer_Token()
+    {
+        var (collector, _) = await CreateCollectorAsync();
+        var repository = new CredentialRepository(_db.Factory, _crypto);
+        var credentialId = await repository.InsertAsync("numeric-cred", "{\"token\":\"tk-by-id-7\"}", null, "test");
+        using var server = TestDownloadServer.Start();
+        string? receivedAuth = null;
+        server.OnRequest = ctx => { receivedAuth = ctx.Request.Headers["Authorization"]; };
+
+        var attachments = ParseAttachments($$"""
+            [{"type":"http","url":"{{server.Url}}f","optional":false,"credentialId":{{credentialId}}}]
+            """);
+
+        await collector.CollectAsync(attachments, DateTime.Now, CancellationToken.None);
+
+        Assert.True(credentialId > 0);
+        Assert.Equal("Bearer tk-by-id-7", receivedAuth);
+    }
+
+    [Fact]
+    public async Task CredentialId_Boolean_Throws_Clear_Error()
+    {
+        var (collector, _) = await CreateCollectorAsync();
+        using var server = TestDownloadServer.Start();
+
+        var attachments = ParseAttachments("""
+            [{"type":"http","url":"SERVER_PLACEHOLDER","optional":false,"credentialId":true}]
+            """.Replace("SERVER_PLACEHOLDER", server.Url + "f"));
+
+        var ex = await Assert.ThrowsAsync<ExecutorException>(
+            () => collector.CollectAsync(attachments, DateTime.Now, CancellationToken.None));
+
+        Assert.Equal("credentialId 仅支持凭证名称(字符串)或数字 id", ex.Message);
+    }
+
+    [Fact]
     public async Task Unknown_Type_Throws()
     {
         var (collector, _) = await CreateCollectorAsync();
