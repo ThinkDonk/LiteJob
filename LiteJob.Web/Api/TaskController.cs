@@ -74,8 +74,7 @@ public sealed class TaskController : ControllerBase
             t.UpdatedBy,
             t.CreatedAt,
             t.UpdatedAt,
-            t.NextPlannedAt,
-            nextTriggerAt = NextTriggerOf(t),
+            nextTriggerAt = FormatTrigger(NextTriggerOf(t)),
             isRunning = runningIds.Contains(t.Id)
         });
         return Ok(new { items = result, total });
@@ -89,6 +88,7 @@ public sealed class TaskController : ControllerBase
         {
             return NotFound(new { message = "任务不存在" });
         }
+        var runningIds = await _runRepository.GetRunningTaskIdsAsync();
         return Ok(new
         {
             task.Id,
@@ -107,8 +107,8 @@ public sealed class TaskController : ControllerBase
             task.UpdatedBy,
             task.CreatedAt,
             task.UpdatedAt,
-            task.NextPlannedAt,
-            nextTriggerAt = NextTriggerOf(task)
+            nextTriggerAt = FormatTrigger(NextTriggerOf(task)),
+            isRunning = runningIds.Contains(task.Id)
         });
     }
 
@@ -350,6 +350,9 @@ public sealed class TaskController : ControllerBase
             Remark = request.Remark
         };
     }
+
+    private static string? FormatTrigger(DateTime? triggerAt)
+        => triggerAt?.ToString("yyyy-MM-dd HH:mm:ss");
 
     private DateTime? NextTriggerOf(TaskEntity task)
     {

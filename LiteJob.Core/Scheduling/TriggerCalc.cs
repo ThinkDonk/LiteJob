@@ -35,8 +35,19 @@ public static class TriggerCalc
         }
     }
 
+    /// <summary>
+    /// 未来 count 次触发预览。once 表达式特殊处理：未过期返回单元素数组，已过期返回空数组；
+    /// cron 返回未来 count 个触发点。非法表达式抛 FormatException。
+    /// </summary>
     public static List<DateTime> Preview(string expr, int count)
     {
+        var trimmed = expr?.Trim();
+        if (trimmed is not null && trimmed.StartsWith("once:", StringComparison.OrdinalIgnoreCase))
+        {
+            var onceTime = Next(trimmed, DateTime.Now);
+            return onceTime is null ? new List<DateTime>() : new List<DateTime> { onceTime.Value };
+        }
+
         var result = new List<DateTime>();
         var now = DateTime.Now;
         for (var i = 0; i < count; i++)

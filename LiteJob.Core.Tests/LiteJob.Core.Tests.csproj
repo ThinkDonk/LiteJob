@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LiteJob.Core\LiteJob.Core.csproj" />
+    <ProjectReference Include="..\LiteJob.Web\LiteJob.Web.csproj" />
   </ItemGroup>
 
 </Project>

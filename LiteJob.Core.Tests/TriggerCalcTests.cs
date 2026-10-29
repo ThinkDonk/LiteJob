@@ -107,4 +107,22 @@ public class TriggerCalcTests
         Assert.Equal(TimeSpan.FromDays(1), times[1] - times[0]);
         Assert.Equal(TimeSpan.FromDays(1), times[2] - times[1]);
     }
+
+    [Fact]
+    public void Preview_Once_Future_Returns_Single_Element()
+    {
+        var at = DateTime.Now.AddHours(2);
+        var times = TriggerCalc.Preview($"once:{at:yyyy-MM-dd HH:mm}", 5);
+
+        var item = Assert.Single(times);
+        Assert.Equal(new DateTime(at.Year, at.Month, at.Day, at.Hour, at.Minute, 0), item);
+    }
+
+    [Fact]
+    public void Preview_Once_Past_Returns_Empty_Array()
+    {
+        var times = TriggerCalc.Preview("once:2000-01-01 10:00", 5);
+
+        Assert.Empty(times);
+    }
 }
