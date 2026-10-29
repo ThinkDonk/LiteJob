@@ -59,6 +59,13 @@ public sealed class TaskRepository
             $"SELECT {Columns} FROM t_task WHERE id=@Id;", new { Id = id });
     }
 
+    public async Task<TaskEntity?> GetByNameAsync(string name)
+    {
+        await using var conn = await _factory.CreateOpenConnectionAsync();
+        return await conn.QuerySingleOrDefaultAsync<TaskEntity>(
+            $"SELECT {Columns} FROM t_task WHERE name=@Name;", new { Name = name });
+    }
+
     public async Task<(IReadOnlyList<TaskEntity> Items, int Total)> GetPagedAsync(
         string? keyword, string? group, int? enabled, int page, int pageSize)
     {
@@ -95,6 +102,14 @@ public sealed class TaskRepository
         await using var conn = await _factory.CreateOpenConnectionAsync();
         var items = await conn.QueryAsync<TaskEntity>(
             $"SELECT {Columns} FROM t_task WHERE enabled = 1 ORDER BY id;");
+        return items.AsList();
+    }
+
+    public async Task<IReadOnlyList<TaskEntity>> GetAllForExportAsync()
+    {
+        await using var conn = await _factory.CreateOpenConnectionAsync();
+        var items = await conn.QueryAsync<TaskEntity>(
+            $"SELECT {Columns} FROM t_task ORDER BY name;");
         return items.AsList();
     }
 

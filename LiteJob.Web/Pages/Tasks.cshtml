@@ -23,6 +23,9 @@
     </select>
     <button class="btn primary" onclick="reload(1)">查询</button>
     <span style="flex:1"></span>
+    <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importTasks(this.files[0])" />
+    <button class="btn" onclick="document.getElementById('import-file').click()">导入</button>
+    <button class="btn" onclick="location.href='/api/tasks/export'">导出</button>
     <a class="btn primary" href="/tasks/edit">＋ 新建任务</a>
 </div>
 
@@ -70,6 +73,27 @@
         if (v === 1) return '<span class="badge green">✓ 成功</span>';
         if (v === 0) return '<span class="badge red">✗ 失败</span>';
         return '<span class="muted">-</span>';
+    }
+
+    async function importTasks(file) {
+        if (!file) return;
+        try {
+            var text = await file.text();
+            var items = JSON.parse(text);
+            if (!Array.isArray(items)) { alert('导入文件应为 JSON 数组'); return; }
+            var resp = await fetchApi('/api/tasks/import', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(items)
+            });
+            if (resp.status === 403) { alert('无权限：仅管理员可导入'); return; }
+            if (!resp.ok) { var d0 = await resp.json().catch(function () { return {}; }); alert(d0.message || '导入失败'); return; }
+            var d = await resp.json();
+            var skipped = (d.skipped || []).map(function (s) { return s.name + '：' + s.reason; }).join('\n');
+            alert('导入完成：成功 ' + (d.imported || []).length + ' 条' + (skipped ? '\n跳过：\n' + skipped : ''));
+            reload(1);
+        } catch (err) {
+            alert('导入失败：' + err.message);
+        }
     }
 
     async function reload(targetPage) {

@@ -6,6 +6,7 @@ using LiteJob.Core.Repositories;
 using LiteJob.Core.Scheduling;
 using LiteJob.Core.Security;
 using LiteJob.Web.Bootstrap;
+using LiteJob.Web.Middlewares;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -51,6 +52,28 @@ builder.Services.AddSingleton<ExecutionPipeline>();
 builder.Services.AddSingleton<SimpleTaskScheduler>();
 builder.Services.AddSingleton<ITaskScheduler>(sp => sp.GetRequiredService<SimpleTaskScheduler>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SimpleTaskScheduler>());
+builder.Services.AddSingleton<AuditLogRepository>();
+builder.Services.AddSingleton<UserRepository>();
+builder.Services.AddSingleton<LiteJob.Core.Hosting.MaintenanceService>(sp =>
+    new LiteJob.Core.Hosting.MaintenanceService(
+        sp.GetRequiredService<SqliteConnectionFactory>(),
+        sp.GetRequiredService<ConfigRepository>(),
+        sp.GetRequiredService<NotifyChannelRepository>(),
+        sp.GetRequiredService<ILogger<LiteJob.Core.Hosting.MaintenanceService>>()));
+builder.Services.AddSingleton<LiteJob.Core.Tasks.TaskImportExportService>();
+builder.Services.AddHostedService<LiteJob.Web.Hosting.MaintenanceHostedService>();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("open", new Microsoft.OpenApi.OpenApiInfo
+    {
+        Title = "LiteJob 开放 API",
+        Version = "v1",
+        Description = "WMS 主系统集成端点（X-API-Key 鉴权）。cron 支持 5/6 字段；一次性任务写 once:yyyy-MM-dd HH:mm。"
+    });
+    options.DocInclusionPredicate((docName, apiDesc) =>
+        (apiDesc.GroupName ?? string.Empty) == docName);
+});
 
 var jwtKey = builder.Configuration["Security:JwtKey"]
     ?? throw new InvalidOperationException("缺少配置 Security:JwtKey");
@@ -92,6 +115,19 @@ Directory.CreateDirectory("data");
 await using (var scope = app.Services.CreateAsyncScope())
 {
     await scope.ServiceProvider.GetRequiredService<MigrationRunner>().RunAsync();
+}
+
+app.UseMiddleware<ApiKeyMiddleware>(
+    app.Configuration["Security:ApiKey"] ?? throw new InvalidOperationException("缺少配置 Security:ApiKey"));
+
+if (app.Configuration.GetValue("Swagger:Enabled", true))
+{
+    app.UseSwagger(options => options.RouteTemplate = "/swagger/{documentName}.json");
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/open.json", "LiteJob 开放 API");
+        options.RoutePrefix = "swagger";
+    });
 }
 
 app.UseAuthentication();

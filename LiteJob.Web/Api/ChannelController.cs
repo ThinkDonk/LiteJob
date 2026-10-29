@@ -1,4 +1,6 @@
 using LiteJob.Core.Entities;
+using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 using LiteJob.Core.Notify;
 using LiteJob.Core.Repositories;
 using Microsoft.AspNetCore.Authorization;
@@ -16,11 +18,16 @@ public sealed class ChannelController : ControllerBase
 {
     private readonly NotifyChannelRepository _repository;
     private readonly NotifySender _sender;
+    private readonly AuditLogRepository _auditRepository;
+    private readonly ILogger<ChannelController> _logger;
 
-    public ChannelController(NotifyChannelRepository repository, NotifySender sender)
+    public ChannelController(NotifyChannelRepository repository, NotifySender sender,
+        AuditLogRepository auditRepository, ILogger<ChannelController> logger)
     {
         _repository = repository;
         _sender = sender;
+        _auditRepository = auditRepository;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -59,6 +66,7 @@ public sealed class ChannelController : ControllerBase
         var channel = MapToEntity(request);
         channel.CreatedAt = DateTime.Now;
         var id = await _repository.InsertAsync(channel);
+        await WriteAuditAsync("create", channel.Name, $"type={channel.Type}");
         return CreatedAtAction(nameof(List), new { id }, new { id });
     }
 
@@ -80,6 +88,7 @@ public sealed class ChannelController : ControllerBase
         var channel = MapToEntity(request);
         channel.Id = id;
         await _repository.UpdateAsync(channel, request.Secret);
+        await WriteAuditAsync("update", channel.Name, $"type={channel.Type} enabled={channel.Enabled}");
         return Ok(new { ok = true });
     }
 
@@ -87,11 +96,13 @@ public sealed class ChannelController : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> Delete(long id)
     {
-        if (await _repository.GetByIdAsync(id) is null)
+        var channel = await _repository.GetByIdAsync(id);
+        if (channel is null)
         {
             return NotFound(new { message = "通道不存在" });
         }
         await _repository.DeleteAsync(id);
+        await WriteAuditAsync("delete", channel.Name, $"type={channel.Type}");
         return Ok(new { ok = true });
     }
 
@@ -106,7 +117,23 @@ public sealed class ChannelController : ControllerBase
         }
 
         var (ok, error) = await _sender.SendToChannelAsync(channel, NotifyKind.Test, "【LiteJob】通道测试", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), ct);
+        await WriteAuditAsync("test", channel.Name, ok ? "ok" : $"fail:{error}");
         return Ok(ok ? new { ok = true } : new { ok = false, error });
+    }
+
+    private async Task WriteAuditAsync(string action, string targetName, string detail)
+    {
+        try
+        {
+            await _auditRepository.InsertAsync(
+                User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier) ?? "admin",
+                action, "channel", null, targetName, detail,
+                HttpContext.Connection.RemoteIpAddress?.ToString());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "通道审计写入失败 action={Action}", action);
+        }
     }
 
     private static string? Validate(ChannelUpsertRequest request)

@@ -1,0 +1,108 @@
+@page
+@model LiteJob.Web.Pages.AuditsModel
+@{
+    ViewData["Title"] = "审计日志 - LiteJob";
+    Layout = "_Layout";
+}
+
+<h2 class="page-title">审计日志</h2>
+
+<div id="global-error"></div>
+
+<div class="toolbar">
+    <label>操作者</label>
+    <select id="f-user" style="min-width: 140px;"><option value="">全部</option></select>
+    <label>动作</label>
+    <select id="f-action">
+        <option value="">全部</option>
+        <option>login</option><option>create</option><option>update</option>
+        <option>delete</option><option>enable</option><option>disable</option>
+        <option>run</option><option>copy</option><option>import</option>
+        <option>export</option><option>upsert-run</option>
+    </select>
+    <label>时间从</label>
+    <input id="f-from" type="datetime-local" />
+    <label>到</label>
+    <input id="f-to" type="datetime-local" />
+    <button class="btn primary" onclick="reload(1)">查询</button>
+</div>
+
+<div class="panel" style="padding: 0;">
+    <table class="grid" id="audit-table">
+        <thead>
+            <tr><th>时间</th><th>操作者</th><th>动作</th><th>目标类型</th><th>目标名</th><th>详情</th></tr>
+        </thead>
+        <tbody><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+    </table>
+</div>
+
+<div class="pagination">
+    <button class="btn mini" id="page-prev" onclick="reload(page - 1)">上一页</button>
+    <span id="page-info">-</span>
+    <button class="btn mini" id="page-next" onclick="reload(page + 1)">下一页</button>
+</div>
+
+@section Scripts {
+<script>
+    var page = 1, totalPages = 1, pageSize = 20;
+    var usernames = [];
+
+    function escapeHtml(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function reload(targetPage) {
+        page = Math.max(1, targetPage || 1);
+        var params = new URLSearchParams({
+            username: document.getElementById('f-user').value,
+            action: document.getElementById('f-action').value,
+            from: document.getElementById('f-from').value,
+            to: document.getElementById('f-to').value
+        });
+        params.append('page', page);
+        params.append('pageSize', pageSize);
+        try {
+            var resp = await fetchApi('/api/audits?' + params.toString());
+            if (!resp.ok) { showError('加载审计日志失败：' + resp.status); return; }
+            var data = await resp.json();
+            if (data.usernames && usernames.length === 0) {
+                usernames = data.usernames;
+                var select = document.getElementById('f-user');
+                usernames.forEach(function (u) {
+                    var option = document.createElement('option');
+                    option.value = u;
+                    option.textContent = u;
+                    select.appendChild(option);
+                });
+            }
+            totalPages = Math.max(1, Math.ceil(data.total / pageSize));
+            page = Math.min(page, totalPages);
+            document.getElementById('page-info').textContent = '第 ' + page + ' / ' + totalPages + ' 页，共 ' + data.total + ' 条';
+            document.getElementById('page-prev').disabled = page <= 1;
+            document.getElementById('page-next').disabled = page >= totalPages;
+
+            var tbody = document.querySelector('#audit-table tbody');
+            if (data.total === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="muted">暂无审计记录</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.items.map(function (a) {
+                return '<tr title="IP: ' + escapeHtml(a.ip || '-') + '">' +
+                    '<td>' + fmtTime(a.createAt) + '</td><td>' + escapeHtml(a.username) +
+                    '</td><td>' + escapeHtml(a.action) + '</td><td>' + escapeHtml(a.targetType) +
+                    '</td><td>' + escapeHtml(a.targetName || '-') + '</td><td>' + escapeHtml(a.detail || '-') + '</td></tr>';
+            }).join('');
+        } catch (err) {
+            if (err && err.message !== 'unauthorized') showError('网络错误');
+        }
+    }
+
+    function showError(msg) {
+        var box = document.getElementById('global-error');
+        box.textContent = msg; box.style.display = 'block';
+    }
+
+    reload(1);
+</script>
+}

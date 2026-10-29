@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using LiteJob.Core.Repositories;
+using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -26,10 +28,15 @@ public sealed class ConfigController : ControllerBase
     };
 
     private readonly ConfigRepository _repository;
+    private readonly AuditLogRepository _auditRepository;
+    private readonly ILogger<ConfigController> _logger;
 
-    public ConfigController(ConfigRepository repository)
+    public ConfigController(ConfigRepository repository, AuditLogRepository auditRepository,
+        ILogger<ConfigController> logger)
     {
         _repository = repository;
+        _auditRepository = auditRepository;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -60,7 +67,25 @@ public sealed class ConfigController : ControllerBase
             }
             await _repository.SetAsync(key, value);
         }
+        await WriteAuditAsync("update",
+            string.Join(",", request.Values.Keys),
+            "配置更新（值不记录）");
         return Ok(new { ok = true });
+    }
+
+    private async Task WriteAuditAsync(string action, string targetName, string detail)
+    {
+        try
+        {
+            await _auditRepository.InsertAsync(
+                User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier) ?? "admin",
+                action, "config", null, targetName, detail,
+                HttpContext.Connection.RemoteIpAddress?.ToString());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "配置审计写入失败");
+        }
     }
 
     [HttpPost("smtp-test")]

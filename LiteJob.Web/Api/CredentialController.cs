@@ -16,10 +16,14 @@ public sealed record CredentialUpsertRequest(string Name, string? ValueJson, str
 public sealed class CredentialController : ControllerBase
 {
     private readonly CredentialRepository _repository;
+    private readonly AuditLogRepository _auditRepository;
+    private readonly ILogger<CredentialController> _logger;
 
-    public CredentialController(CredentialRepository repository)
+    public CredentialController(CredentialRepository repository, AuditLogRepository auditRepository, ILogger<CredentialController> logger)
     {
         _repository = repository;
+        _auditRepository = auditRepository;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -57,6 +61,7 @@ public sealed class CredentialController : ControllerBase
 
         var id = await _repository.InsertAsync(request.Name.Trim(), request.ValueJson!.Trim(),
             request.Remark, User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier));
+        await WriteAuditAsync("create", request.Name.Trim(), $"remark={request.Remark}");
         return CreatedAtAction(nameof(List), new { id }, new { id });
     }
 
@@ -83,6 +88,7 @@ public sealed class CredentialController : ControllerBase
 
         await _repository.UpdateAsync(id, request.ValueJson!.Trim(), request.Remark,
             User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier));
+        await WriteAuditAsync("update", request.Name.Trim(), $"remark={request.Remark}");
         return Ok(new { ok = true });
     }
 
@@ -90,11 +96,13 @@ public sealed class CredentialController : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> Delete(long id)
     {
-        if (await _repository.GetByIdAsync(id) is null)
+        var credential = await _repository.GetByIdAsync(id);
+        if (credential is null)
         {
             return NotFound(new { message = "凭证不存在" });
         }
         await _repository.DeleteAsync(id);
+        await WriteAuditAsync("delete", credential.Name, $"remark={credential.Remark}");
         return Ok(new { ok = true });
     }
 
@@ -129,6 +137,18 @@ public sealed class CredentialController : ControllerBase
         catch (JsonException ex)
         {
             return Ok(new { ok = false, error = "明文 JSON 解析失败：" + ex.Message });
+        }
+    }
+
+        private async Task WriteAuditAsync(string action, string targetName, string detail)
+    {
+        try
+        {
+            await _auditRepository.InsertAsync(User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier) ?? "admin", action, "credential", null, targetName, detail, HttpContext.Connection.RemoteIpAddress?.ToString());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "凭证审计写入失败");
         }
     }
 

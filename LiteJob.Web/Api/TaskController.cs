@@ -5,6 +5,7 @@ using LiteJob.Core.Entities;
 using LiteJob.Core.Executors;
 using LiteJob.Core.Repositories;
 using LiteJob.Core.Scheduling;
+using LiteJob.Core.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
@@ -32,14 +33,21 @@ public sealed class TaskController : ControllerBase
     private readonly RunRepository _runRepository;
     private readonly ITaskScheduler _scheduler;
     private readonly ExecutorRegistry _executors;
+    private readonly AuditLogRepository _auditRepository;
+    private readonly TaskImportExportService _importExport;
+    private readonly ILogger<TaskController> _logger;
 
     public TaskController(TaskRepository taskRepository, RunRepository runRepository,
-        ITaskScheduler scheduler, ExecutorRegistry executors)
+        ITaskScheduler scheduler, ExecutorRegistry executors, AuditLogRepository auditRepository,
+        TaskImportExportService importExport, ILogger<TaskController> logger)
     {
         _taskRepository = taskRepository;
         _runRepository = runRepository;
         _scheduler = scheduler;
         _executors = executors;
+        _auditRepository = auditRepository;
+        _importExport = importExport;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -133,6 +141,7 @@ public sealed class TaskController : ControllerBase
         {
             await _scheduler.RegisterAsync(task);
         }
+        await WriteAuditAsync("create", task.Name, $"cron={task.Cron} type={task.TaskType}");
         return CreatedAtAction(nameof(GetById), new { id = task.Id }, new { id = task.Id });
     }
 
@@ -178,6 +187,7 @@ public sealed class TaskController : ControllerBase
         {
             await _scheduler.UnregisterAsync(id);
         }
+        await WriteAuditAsync("update", updated.Name, $"cron={updated.Cron} type={updated.TaskType} enabled={updated.Enabled}");
         return Ok(new { ok = true });
     }
 
@@ -193,6 +203,7 @@ public sealed class TaskController : ControllerBase
 
         await _scheduler.UnregisterAsync(id);
         await _taskRepository.DeleteAsync(id);
+        await WriteAuditAsync("delete", task.Name, $"cron={task.Cron}");
         return Ok(new { ok = true });
     }
 
@@ -209,6 +220,7 @@ public sealed class TaskController : ControllerBase
         task.Enabled = 1;
         await _taskRepository.SetEnabledAsync(id, 1);
         await _scheduler.RegisterAsync(task);
+        await WriteAuditAsync("enable", task.Name, "");
         return Ok(new { ok = true });
     }
 
@@ -224,6 +236,7 @@ public sealed class TaskController : ControllerBase
 
         await _taskRepository.SetEnabledAsync(id, 0);
         await _scheduler.UnregisterAsync(id);
+        await WriteAuditAsync("disable", task.Name, "");
         return Ok(new { ok = true });
     }
 
@@ -231,12 +244,14 @@ public sealed class TaskController : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> Run(long id)
     {
-        if (await _taskRepository.GetByIdAsync(id) is null)
+        var task = await _taskRepository.GetByIdAsync(id);
+        if (task is null)
         {
             return NotFound(new { message = "任务不存在" });
         }
 
         await _scheduler.TriggerNowAsync(id);
+        await WriteAuditAsync("run", task.Name, "手动立即执行");
         return Accepted(new { accepted = true });
     }
 
@@ -244,13 +259,47 @@ public sealed class TaskController : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> Copy(long id)
     {
-        if (await _taskRepository.GetByIdAsync(id) is null)
+        var source = await _taskRepository.GetByIdAsync(id);
+        if (source is null)
         {
             return NotFound(new { message = "任务不存在" });
         }
 
-        var copy = await _taskRepository.CopyAsync(id, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        var copy = await _taskRepository.CopyAsync(id, CurrentUsername());
+        await WriteAuditAsync("copy", copy.Name, $"复制自 {source.Name}");
         return CreatedAtAction(nameof(GetById), new { id = copy.Id }, new { id = copy.Id, name = copy.Name });
+    }
+
+    [HttpGet("export")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> Export()
+    {
+        var items = await _importExport.ExportAsync();
+        await WriteAuditAsync("export", "全部任务", $"共 {items.Count} 条");
+        return Ok(new { items });
+    }
+
+    [HttpPost("import")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> Import([FromBody] IReadOnlyList<ExportedTask> items, CancellationToken ct)
+    {
+        var result = await _importExport.ImportAsync(items ?? new List<ExportedTask>(), CurrentUsername(), ct);
+        await WriteAuditAsync("import", "全部任务",
+            $"导入 {result.Imported.Count} 条，跳过 {result.Skipped.Count} 条");
+        return Ok(new { imported = result.Imported, skipped = result.Skipped });
+    }
+
+    private async Task WriteAuditAsync(string action, string targetName, string detail)
+    {
+        try
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            await _auditRepository.InsertAsync(CurrentUsername(), action, "task", null, targetName, detail, ip);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "任务审计写入失败 action={Action}", action);
+        }
     }
 
     private string? Validate(TaskUpsertRequest request)
@@ -314,6 +363,6 @@ public sealed class TaskController : ControllerBase
         }
     }
 
-    private string? CurrentUsername()
-        => User.FindFirstValue(ClaimTypes.NameIdentifier);
+    private string CurrentUsername()
+        => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
 }
