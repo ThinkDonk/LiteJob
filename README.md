@@ -5,6 +5,8 @@
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57.svg)](https://www.sqlite.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
+中文 · [English](README_EN.md)
+
 一个 .NET 8 单进程的轻量定时任务调度中心：**Web 管理端与调度器同进程部署**，任务模型为 `cron + TaskType + Params(JSON)`，首发执行器 `http` / `mail`，内置超时、重试、告警等执行质量保障与完整的管理能力。数据落在单文件 SQLite（WAL），无需外部数据库与消息队列，适合单机部署、边缘机房与小规模后台作业场景。
 
 > A single-process, lightweight scheduled-task hub on .NET 8: the web console and the scheduler run in one process. Tasks are `cron + TaskType + Params(JSON)`; the bundled executors are HTTP API calls and email (with attachments). It ships with timeout/retry/alerting quality controls, credential encryption, audit trails, an open API and a maintenance loop — all on a single-file SQLite database.
