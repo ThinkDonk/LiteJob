@@ -92,29 +92,31 @@ public sealed class HttpTaskExecutor : ITaskExecutor
 
         if (!response.IsSuccessStatusCode)
         {
-            var failResult = BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview);
+            var failResult = BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview, bag);
             throw new ExecutorException($"HTTP {(int)response.StatusCode}", failResult);
         }
 
         if (!string.IsNullOrEmpty(successContains) && !responseBody.Contains(successContains))
         {
-            var failResult = BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview);
+            var failResult = BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview, bag);
             throw new ExecutorException("successContains 断言失败", failResult);
         }
 
-        return new ExecutorResult(BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview));
+        return new ExecutorResult(BuildResult((int)response.StatusCode, snapshot, appliedHeaders, authPreview, bag));
     }
 
     private static string BuildResult(int httpCode, string bodySnapshot,
-        Dictionary<string, string> appliedHeaders, string? authPreview)
+        Dictionary<string, string> appliedHeaders, string? authPreview, SensitiveValueBag bag)
     {
-        var masked = Masker.MaskHeaders(appliedHeaders);
+        var maskedByWhitelist = Masker.MaskHeaders(appliedHeaders);
+        var masked = maskedByWhitelist.ToDictionary(
+            kvp => kvp.Key, kvp => bag.Apply(kvp.Value), StringComparer.OrdinalIgnoreCase);
         return JsonSerializer.Serialize(new
         {
             httpCode,
             bodySnapshot,
             requestHeaders = masked,
-            auth = authPreview
+            auth = authPreview is null ? null : bag.Apply(authPreview)
         });
     }
 

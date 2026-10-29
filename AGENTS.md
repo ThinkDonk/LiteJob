@@ -27,7 +27,7 @@ LiteJob.Core/           类库（不依赖 ASP.NET Core，可单测）
   Scripts/               V1__init.sql、V2__*.sql（内嵌资源迁移脚本）
   Security/              LoginThrottler（登录失败锁定）
 LiteJob.Web/            宿主：Program.cs 组装、Api/ 控制器、Pages/ Razor 页面
-LiteJob.Core.Tests/     xunit 单测（当前 110 项，全绿为交付基线）
+LiteJob.Core.Tests/     xunit 单测（当前 112 项，全绿为交付基线）
 ```
 
 ## 开发约定（隐式契约）
@@ -46,7 +46,7 @@ LiteJob.Core.Tests/     xunit 单测（当前 110 项，全绿为交付基线）
 
 ```powershell
 dotnet build LiteJob.sln --no-incremental   # 必须带 --no-incremental：增量构建会掩盖编译警告（M4 交付事故）；0 警告 0 错误为基线
-dotnet test LiteJob.sln            # 110/110 全绿为基线
+dotnet test LiteJob.sln            # 112/112 全绿为基线
 cd LiteJob.Web; dotnet run         # http://localhost:5270（admin 初始密码见首启日志）
 ```
 

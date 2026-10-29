@@ -107,6 +107,56 @@ public class HttpExecutorMaskingTests : IAsyncDisposable
         Assert.DoesNotContain(token, result.ResultJson);
     }
 
+    [Fact]
+    public async Task Non_Whitelist_Header_With_Cred_Value_Is_Masked_By_Bag()
+    {
+        var token = "echo-secret-12345";
+        using var server = EchoServer.Start();
+        var executor = await CreateExecutorAsync("echo-cred", token);
+        var task = CreateTask(JsonSerializer.Serialize(new
+        {
+            method = "GET",
+            url = server.Url + "echo",
+            headers = new Dictionary<string, string> { ["X-Auth"] = "Bearer $cred:echo-cred.token" }
+        }));
+
+        var result = await executor.ExecuteAsync(task, DateTime.Now, CancellationToken.None);
+
+        Assert.Contains("\"X-Auth\":\"Bearer ***\"", result.ResultJson);
+        Assert.DoesNotContain(token, result.ResultJson);
+        Assert.Contains("\"bodySnapshot\":\"echo: Bearer ***\"", result.ResultJson);
+    }
+
+    [Fact]
+    public async Task Auth_With_Custom_Header_Name_Is_Masked_By_Bag()
+    {
+        var token = "echo-secret-12345";
+        using var server = EchoServer.Start();
+        using var echoServer = EchoServer.Start();
+        var helper = new HttpAuthHelper(new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+        var executor = new HttpTaskExecutor(new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, null, helper);
+        var task = CreateTask(JsonSerializer.Serialize(new
+        {
+            method = "GET",
+            url = echoServer.Url + "echo",
+            auth = new
+            {
+                type = "login",
+                loginUrl = server.Url + "login",
+                loginBody = new { },
+                tokenPath = "$.data.accessToken",
+                injectAs = "X-Auth: Bearer {token}"
+            }
+        }));
+
+        var result = await executor.ExecuteAsync(task, DateTime.Now, CancellationToken.None);
+
+        Assert.Contains("\"X-Auth\":\"***\"", result.ResultJson);
+        Assert.DoesNotContain(token, result.ResultJson);
+        Assert.Contains("\"auth\":\"X-Auth: Bearer ***\"", result.ResultJson);
+        Assert.Contains("\"bodySnapshot\":\"echo: ***\"", result.ResultJson);
+    }
+
     public ValueTask DisposeAsync() => _db.DisposeAsync();
 }
 
@@ -168,8 +218,8 @@ internal sealed class EchoServer : IDisposable
                 else
                 {
                     context.Response.ContentType = "text/plain";
-                    var auth = context.Request.Headers["Authorization"] ?? "none";
-                    body = $"echo: {auth}";
+                    var echoed = context.Request.Headers["X-Auth"] ?? context.Request.Headers["Authorization"] ?? "none";
+                    body = $"echo: {echoed}";
                 }
                 var bytes = Encoding.UTF8.GetBytes(body);
                 context.Response.StatusCode = 200;
