@@ -42,7 +42,12 @@ public static class TriggerCalc
     public static List<DateTime> Preview(string expr, int count)
     {
         var trimmed = expr?.Trim();
-        if (trimmed is not null && trimmed.StartsWith("once:", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            throw new FormatException("触发表达式不能为空");
+        }
+
+        if (trimmed.StartsWith("once:", StringComparison.OrdinalIgnoreCase))
         {
             var onceTime = Next(trimmed, DateTime.Now);
             return onceTime is null ? new List<DateTime>() : new List<DateTime> { onceTime.Value };
@@ -52,7 +57,7 @@ public static class TriggerCalc
         var now = DateTime.Now;
         for (var i = 0; i < count; i++)
         {
-            var next = Next(expr, now) ?? throw new FormatException($"表达式已无后续触发时间：{expr}");
+            var next = Next(trimmed, now) ?? throw new FormatException($"表达式已无后续触发时间：{trimmed}");
             result.Add(next);
             now = next.AddSeconds(1);
         }

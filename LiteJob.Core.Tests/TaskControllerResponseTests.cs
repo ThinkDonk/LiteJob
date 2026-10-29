@@ -10,8 +10,6 @@ using LiteJob.Web.Api;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using LiteJob.Web.Api;
-
 namespace LiteJob.Core.Tests;
 
 /// <summary>任务 API 响应字段契约：nextTriggerAt 格式统一、nextPlannedAt 不外泄、GetById 含 isRunning。</summary>

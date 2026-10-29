@@ -57,8 +57,8 @@
         <div id="once-section" style="display:none;">
             <div class="form-item">
                 <label>触发时间（到点执行一次后自动结束）</label>
-                <input id="f-once" type="datetime-local" onchange="onOnceInput()" />
-                <div class="muted" style="margin-top: 6px; font-size: 13px;">保存后 cron 字段将写入 once:yyyy-MM-dd HH:mm</div>
+                <input id="f-once" type="datetime-local" onchange="onOnceInput()" oninput="onOnceInput()" />
+                <div id="once-preview" class="muted" style="margin-top: 8px; font-size: 13px; line-height: 1.8;">选择时间后显示触发预览</div>
             </div>
         </div>
     </div>
@@ -206,6 +206,9 @@
         var cron = currentMode() === 'cron';
         document.getElementById('cron-section').style.display = cron ? '' : 'none';
         document.getElementById('once-section').style.display = cron ? 'none' : '';
+        if (!cron) {
+            onOnceInput();
+        }
     }
 
     function onCronInput() {
@@ -246,7 +249,31 @@
         } catch (err) { box.textContent = '预览请求失败'; box.style.color = '#c0392b'; }
     }
 
-    function onOnceInput() { }
+    function onOnceInput() {
+        var box = document.getElementById('once-preview');
+        var value = document.getElementById('f-once').value;
+        if (!value) {
+            box.textContent = '选择时间后显示触发预览';
+            box.className = 'muted';
+            box.style.color = '';
+            return;
+        }
+        var chosen = new Date(value);
+        if (isNaN(chosen.getTime())) {
+            box.textContent = '✗ 时间格式无效';
+            box.style.color = '#c0392b';
+            return;
+        }
+        var chosenText = chosen.getFullYear() + '-' + pad(chosen.getMonth() + 1) + '-' + pad(chosen.getDate()) +
+            ' ' + pad(chosen.getHours()) + ':' + pad(chosen.getMinutes()) + ':00';
+        if (chosen.getTime() <= Date.now()) {
+            box.textContent = '✗ 该时刻已过，保存后启动时将补跑一次并结束';
+            box.style.color = '#c0392b';
+            return;
+        }
+        box.textContent = '✓ 将于 ' + chosenText + ' 触发一次';
+        box.style.color = '#1e8e5a';
+    }
 
     function onTypeChange() {
         var type = document.getElementById('f-type').value;
